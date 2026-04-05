@@ -36,7 +36,7 @@ class TypstWatchAction : AnAction() {
             e.presentation.isEnabledAndVisible = true
             e.presentation.text = "Stop Typst Watch"
         } else {
-            e.presentation.isEnabledAndVisible = file?.fileType == TypstFileType.INSTANCE
+            e.presentation.isEnabledAndVisible = file?.fileType == TypstFileType
             e.presentation.text = "Watch Typst File"
         }
     }

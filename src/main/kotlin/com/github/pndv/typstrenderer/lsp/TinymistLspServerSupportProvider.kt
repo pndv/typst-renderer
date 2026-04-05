@@ -17,7 +17,7 @@ class TinymistLspServerSupportProvider : LspServerSupportProvider {
         file: VirtualFile,
         serverStarter: LspServerSupportProvider.LspServerStarter
     ) {
-        if (file.fileType != TypstFileType.INSTANCE) return
+        if (file.fileType != TypstFileType) return
 
         val manager = TinymistManager.getInstance()
         val tinymistPath = manager.resolveTinymistPath()
@@ -38,7 +38,7 @@ class TinymistLspServerSupportProvider : LspServerSupportProvider {
                     NotificationGroupManager.getInstance()
                         .getNotificationGroup("Typst")
                         .createNotification(
-                            "Tinymist Not Found",
+                            "Tinymist not found",
                             "Tinymist language server is not installed. Install it manually or configure the path in Settings > Tools > Typst.",
                             NotificationType.WARNING
                         ).notify(project)

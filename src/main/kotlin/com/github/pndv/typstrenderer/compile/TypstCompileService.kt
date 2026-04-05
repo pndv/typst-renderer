@@ -17,7 +17,7 @@ class TypstCompileService(private val project: Project) {
             NotificationGroupManager.getInstance()
                 .getNotificationGroup("Typst")
                 .createNotification(
-                    "Typst Not Found",
+                    "Typst not found",
                     "Typst CLI not found. Install it via: cargo install typst-cli, or configure the path in Settings > Tools > Typst.",
                     NotificationType.ERROR
                 ).notify(project)
@@ -42,7 +42,7 @@ class TypstCompileService(private val project: Project) {
                 .getNotificationGroup("Typst")
 
             if (result.exitCode == 0) {
-                val pdfPath = outputPath ?: inputPath.removeSuffix(".typ") + ".pdf"
+                val pdfPath = outputPath ?: (inputPath.removeSuffix(".typ") + ".pdf")
                 notificationGroup.createNotification(
                     "Typst",
                     "Compiled successfully: $pdfPath",
@@ -51,7 +51,7 @@ class TypstCompileService(private val project: Project) {
             } else {
                 val stderr = result.stderr.ifBlank { result.stdout }
                 notificationGroup.createNotification(
-                    "Typst Compilation Failed",
+                    "Typst compilation failed",
                     stderr,
                     NotificationType.ERROR
                 ).notify(project)
@@ -60,7 +60,7 @@ class TypstCompileService(private val project: Project) {
             NotificationGroupManager.getInstance()
                 .getNotificationGroup("Typst")
                 .createNotification(
-                    "Typst Error",
+                    "Typst error",
                     "Failed to run typst: ${e.message}",
                     NotificationType.ERROR
                 ).notify(project)

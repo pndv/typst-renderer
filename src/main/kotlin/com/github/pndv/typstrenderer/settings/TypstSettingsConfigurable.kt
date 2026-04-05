@@ -22,7 +22,7 @@ class TypstSettingsConfigurable : Configurable {
     override fun getDisplayName(): String = "Typst"
 
     override fun createComponent(): JComponent = panel {
-        group("Language Server (tinymist)") {
+        group("Language Server (Tinymist)") {
             row("Status:") {
                 tinymistStatusLabel = JBLabel(getTinymistStatusText()).also { cell(it) }
             }
@@ -42,7 +42,7 @@ class TypstSettingsConfigurable : Configurable {
                 }.comment("Downloads the latest tinymist binary from GitHub for this platform.")
             }
         }
-        group("Compilation (typst CLI)") {
+        group("Compilation (Typst CLI)") {
             row("Status:") {
                 typstStatusLabel = JBLabel(getTypstStatusText()).also { cell(it) }
             }

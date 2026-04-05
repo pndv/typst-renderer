@@ -22,12 +22,6 @@
         <platform.lsp.serverSupportProvider
                 implementation="com.github.pndv.typstrenderer.lsp.TinymistLspServerSupportProvider"/>
 
-        <!-- Tinymist manager and downloader -->
-        <applicationService
-                serviceImplementation="com.github.pndv.typstrenderer.lsp.TinymistManager"/>
-        <applicationService
-                serviceImplementation="com.github.pndv.typstrenderer.lsp.TinymistDownloadService"/>
-
         <!-- Settings -->
         <applicationService
                 serviceImplementation="com.github.pndv.typstrenderer.settings.TypstSettingsState"/>
@@ -35,7 +29,8 @@
                 parentId="tools"
                 instance="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
                 id="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
-                displayName="Typst"/>
+                bundle="messages.TypstBundle" key="settings.displayName" />
+
 
         <!-- Tool window for compilation output -->
         <toolWindow
@@ -49,7 +44,8 @@
                 implementation="com.github.pndv.typstrenderer.editor.TypstSplitEditorProvider"/>
 
         <!-- Notifications -->
-        <notificationGroup id="Typst" displayType="BALLOON"/>
+        <notificationGroup id="Typst" displayType="BALLOON" bundle="messages.TypstBundle"
+                           key="notification.group.typst"/>
     </extensions>
 
     <actions>

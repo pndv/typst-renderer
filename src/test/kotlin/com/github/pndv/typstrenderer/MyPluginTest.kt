@@ -8,7 +8,7 @@ class MyPluginTest : BasePlatformTestCase() {
 
     fun testTypstFileTypeRegistered() {
         val file = myFixture.configureByText("test.typ", "#let foo = 1")
-        assertEquals(TypstFileType.INSTANCE, file.virtualFile.fileType)
+        assertEquals(TypstFileType, file.virtualFile.fileType)
     }
 
     fun testTypstLanguageInstance() {
@@ -17,8 +17,8 @@ class MyPluginTest : BasePlatformTestCase() {
     }
 
     fun testTypstFileTypeProperties() {
-        assertEquals("Typst", TypstFileType.INSTANCE.name)
-        assertEquals("typ", TypstFileType.INSTANCE.defaultExtension)
-        assertNotNull(TypstFileType.INSTANCE.icon)
+        assertEquals("Typst", TypstFileType.name)
+        assertEquals("typ", TypstFileType.defaultExtension)
+        assertNotNull(TypstFileType.icon)
     }
 }

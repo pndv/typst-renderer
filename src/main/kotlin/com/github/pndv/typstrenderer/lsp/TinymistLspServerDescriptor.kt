@@ -12,7 +12,7 @@ class TinymistLspServerDescriptor(
 ) : ProjectWideLspServerDescriptor(project, "Tinymist") {
 
     override fun isSupportedFile(file: VirtualFile): Boolean =
-        file.fileType == TypstFileType.INSTANCE
+        file.fileType == TypstFileType
 
     override fun createCommandLine(): GeneralCommandLine {
         return GeneralCommandLine(tinymistPath, "lsp").apply {

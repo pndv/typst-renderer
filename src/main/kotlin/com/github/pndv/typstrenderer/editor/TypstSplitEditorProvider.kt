@@ -19,7 +19,7 @@ import com.intellij.openapi.vfs.VirtualFile
 class TypstSplitEditorProvider : FileEditorProvider, DumbAware {
 
     override fun accept(project: Project, file: VirtualFile): Boolean =
-        file.fileType == TypstFileType.INSTANCE
+        file.fileType == TypstFileType
 
     override fun createEditor(project: Project, file: VirtualFile): FileEditor {
         val textEditor = TextEditorProvider.getInstance().createEditor(project, file) as TextEditor

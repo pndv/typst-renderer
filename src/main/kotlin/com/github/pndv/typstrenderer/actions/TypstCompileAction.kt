@@ -18,7 +18,7 @@ class TypstCompileAction : AnAction() {
 
     override fun update(e: AnActionEvent) {
         val file = e.getData(CommonDataKeys.VIRTUAL_FILE)
-        e.presentation.isEnabledAndVisible = file?.fileType == TypstFileType.INSTANCE
+        e.presentation.isEnabledAndVisible = file?.fileType == TypstFileType
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT

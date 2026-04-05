@@ -9,9 +9,9 @@ import java.io.File
 /**
  * Resolves the tinymist and typst binary paths using the following priority:
  * 1. User-configured path in settings
- * 2. Binary found on system PATH + well-known install locations
+ * 2. Binary found on system PATH and well-known install locations
  * 3. (tinymist only) Previously downloaded binary in the plugin data directory
- * 4. null (not found)
+ * 4. `null` (not found)
  *
  * Note: IntelliJ as a GUI app on macOS/Windows may not inherit the user's full shell/terminal
  * PATH, so we also probe well-known directories where cargo, homebrew, scoop, etc. install binaries.

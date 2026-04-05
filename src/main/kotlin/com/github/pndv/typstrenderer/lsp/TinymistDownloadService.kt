@@ -37,7 +37,7 @@ class TinymistDownloadService {
             return
         }
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Downloading Tinymist Language Server", true) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Downloading Tinymist language server", true) {
             override fun run(indicator: ProgressIndicator) {
                 isDownloading = true
                 try {
@@ -82,7 +82,7 @@ class TinymistDownloadService {
                     NotificationGroupManager.getInstance()
                         .getNotificationGroup("Typst")
                         .createNotification(
-                            "Tinymist Downloaded",
+                            "Tinymist downloaded",
                             "Tinymist language server has been downloaded and is ready to use.",
                             NotificationType.INFORMATION
                         ).notify(project)
@@ -154,7 +154,7 @@ class TinymistDownloadService {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("Typst")
             .createNotification(
-                "Tinymist Download Failed",
+                "Tinymist download failed",
                 message,
                 NotificationType.ERROR
             ).notify(project)
