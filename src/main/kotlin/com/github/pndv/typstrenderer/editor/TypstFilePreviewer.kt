@@ -28,10 +28,13 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.io.BaseOutputReader
 import org.cef.handler.CefLoadHandlerAdapter
 import java.beans.PropertyChangeListener
 import java.io.File
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import javax.swing.JComponent
 import javax.swing.SwingConstants
 
@@ -58,6 +61,8 @@ class TypstFilePreviewer(
 
     private var processHandler: OSProcessHandler? = null
     private val outputPdf: File
+    private val reloadExecutor = AppExecutorUtil.createBoundedScheduledExecutorService("TypstPdfReload", 1)
+    private var reloadJob: ScheduledFuture<*>? = null
 
     private val isDark get() = EditorColorsManager.getInstance().isDarkEditor
 
@@ -125,6 +130,8 @@ class TypstFilePreviewer(
     override fun getFile(): VirtualFile = file
 
     override fun dispose() {
+        reloadJob?.cancel(false)
+        reloadExecutor.shutdownNow()
         stopWatching()
         // Clean up temp PDF
         if (outputPdf.exists()) {
@@ -180,8 +187,7 @@ class TypstFilePreviewer(
 
         try {
             val handler = object : OSProcessHandler(commandLine) {
-                override fun readerOptions(): BaseOutputReader.Options =
-                    BaseOutputReader.Options.forMostlySilentProcess()
+                override fun readerOptions(): BaseOutputReader.Options = BaseOutputReader.Options.BLOCKING
             }
 
             handler.addProcessListener(object : ProcessListener {
@@ -212,7 +218,7 @@ class TypstFilePreviewer(
                     // When typst finishes a compilation, reload the PDF
                     if (text.contains("writing to", ignoreCase = true) ||
                         text.contains("compiled", ignoreCase = true)) {
-                        reloadPdf()
+                        scheduleReloadPdf()
                     }
                 }
 
@@ -230,7 +236,7 @@ class TypstFilePreviewer(
 
             // If a PDF already exists from a previous session, show it immediately
             if (outputPdf.exists() && outputPdf.length() > 0) {
-                reloadPdf()
+                scheduleReloadPdf()
             } else {
                 browser?.loadHTML(waitingHtml())
             }
@@ -269,7 +275,7 @@ class TypstFilePreviewer(
             override fun after(events: List<VFileEvent>) {
                 for (event in events) {
                     if (event.path == outputPdf.absolutePath) {
-                        reloadPdf()
+                        scheduleReloadPdf()
                         break
                     }
                 }
@@ -278,6 +284,13 @@ class TypstFilePreviewer(
     }
 
     // ---- Reload the PDF in the JCEF browser ----
+
+    /** Debounce: coalesces rapid reload requests (e.g. "writing to" + "compiled" arriving together). */
+    private fun scheduleReloadPdf() {
+        reloadJob?.cancel(false)
+        reloadJob = reloadExecutor.schedule(::reloadPdf, 300, TimeUnit.MILLISECONDS)
+    }
+
     private fun reloadPdf() {
         if (!jcefSupported || browser == null) return
         if (!outputPdf.exists() || outputPdf.length() == 0L) return
