@@ -157,7 +157,7 @@ class TypstDownloadService {
         }
     }
 
-    private fun extractTypstBinary(archiveFile: File, targetBinary: File) {
+    internal fun extractTypstBinary(archiveFile: File, targetBinary: File) {
         if (TinymistManager.isWindows()) {
             extractFromZip(archiveFile, targetBinary)
         } else {
@@ -169,7 +169,7 @@ class TypstDownloadService {
      * Extracts the typst binary from a .tar.xz archive using the system `tar` command.
      * The archive structure is: {dirname}/typst
      */
-    private fun extractFromTarXz(archiveFile: File, targetBinary: File) {
+    internal fun extractFromTarXz(archiveFile: File, targetBinary: File) {
         val tempExtractDir = File(archiveFile.parent, "typst-extract-tmp")
         tempExtractDir.mkdirs()
         try {
@@ -199,7 +199,7 @@ class TypstDownloadService {
      * Extracts the typst.exe binary from a .zip archive using Java's built-in ZipInputStream.
      * The archive structure is: {dirname}/typst.exe
      */
-    private fun extractFromZip(archiveFile: File, targetBinary: File) {
+    internal fun extractFromZip(archiveFile: File, targetBinary: File) {
         ZipInputStream(archiveFile.inputStream().buffered()).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
