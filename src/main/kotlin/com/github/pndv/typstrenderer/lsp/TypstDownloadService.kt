@@ -10,7 +10,6 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.util.io.HttpRequests
-import org.jetbrains.annotations.VisibleForTesting
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -52,12 +51,12 @@ class TypstDownloadService {
 
                     val assetName = TinymistManager.getTypstPlatformAssetName()
                     if (assetName == null) {
-                        notifyError(project, "Unsupported platform: ${System.getProperty("os.name")} ${System.getProperty("os.arch")}")
+                        notifyError(project, TinymistDownloadService.unsupportedPlatformMessage())
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
 
-                    val downloadUrl = resolveLatestDownloadUrl(assetName)
+                    val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.typst.baseUrl, assetName)
                     if (downloadUrl == null) {
                         notifyError(project, "Could not find Typst release for this platform ($assetName)")
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
@@ -119,9 +118,8 @@ class TypstDownloadService {
         })
     }
 
-    @VisibleForTesting
-    fun resolveLatestDownloadUrl(assetName: String): String? {
-        val url = "$GITHUB_RELEASES_LATEST/download/$assetName"
+    fun resolveLatestDownloadUrl(baseUrl: String, assetName: String): String? {
+        val url = "$baseUrl/$assetName"
 
         return try {
             HttpRequests.head(url)
@@ -229,8 +227,6 @@ class TypstDownloadService {
     }
 
     companion object {
-        private const val GITHUB_RELEASES_LATEST = "https://github.com/typst/typst/releases/latest"
-
         fun getInstance(): TypstDownloadService =
             ApplicationManager.getApplication().getService(TypstDownloadService::class.java)
     }

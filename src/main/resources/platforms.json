@@ -1,0 +1,78 @@
+{
+  "tinymist": {
+    "baseUrl": "https://github.com/Myriad-Dreamin/tinymist/releases/latest/download",
+    "platforms": [
+      {
+        "os": "darwin",
+        "arch": "arm64",
+        "asset": "tinymist-darwin-arm64",
+        "archive": null
+      },
+      {
+        "os": "darwin",
+        "arch": "x64",
+        "asset": "tinymist-darwin-x64",
+        "archive": null
+      },
+      {
+        "os": "linux",
+        "arch": "arm64",
+        "asset": "tinymist-linux-arm64",
+        "archive": null
+      },
+      {
+        "os": "linux",
+        "arch": "x64",
+        "asset": "tinymist-linux-x64",
+        "archive": null
+      },
+      {
+        "os": "windows",
+        "arch": "x64",
+        "asset": "tinymist-win32-x64.exe",
+        "archive": null
+      }
+    ]
+  },
+  "typst": {
+    "baseUrl": "https://github.com/typst/typst/releases/latest/download",
+    "platforms": [
+      {
+        "os": "darwin",
+        "arch": "arm64",
+        "asset": "typst-aarch64-apple-darwin.tar.xz",
+        "archive": "tarxz"
+      },
+      {
+        "os": "darwin",
+        "arch": "x64",
+        "asset": "typst-x86_64-apple-darwin.tar.xz",
+        "archive": "tarxz"
+      },
+      {
+        "os": "linux",
+        "arch": "arm64",
+        "asset": "typst-aarch64-unknown-linux-musl.tar.xz",
+        "archive": "tarxz"
+      },
+      {
+        "os": "linux",
+        "arch": "x64",
+        "asset": "typst-x86_64-unknown-linux-musl.tar.xz",
+        "archive": "tarxz"
+      },
+      {
+        "os": "windows",
+        "arch": "arm64",
+        "asset": "typst-aarch64-pc-windows-msvc.zip",
+        "archive": "zip"
+      },
+      {
+        "os": "windows",
+        "arch": "x64",
+        "asset": "typst-x86_64-pc-windows-msvc.zip",
+        "archive": "zip"
+      }
+    ]
+  }
+}

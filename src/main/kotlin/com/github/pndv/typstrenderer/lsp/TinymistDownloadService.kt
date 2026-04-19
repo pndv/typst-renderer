@@ -10,7 +10,6 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.util.io.HttpRequests
-import org.jetbrains.annotations.VisibleForTesting
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -47,13 +46,13 @@ class TinymistDownloadService {
 
                     val assetName = TinymistManager.getPlatformAssetName()
                     if (assetName == null) {
-                        notifyError(project, "Unsupported platform: ${System.getProperty("os.name")} ${System.getProperty("os.arch")}")
+                        notifyError(project, unsupportedPlatformMessage())
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
 
                     // Resolve the latest release download URL
-                    val downloadUrl = resolveLatestDownloadUrl(assetName)
+                    val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.tinymist.baseUrl, assetName)
                     if (downloadUrl == null) {
                         notifyError(project, "Could not find tinymist release for this platform ($assetName)")
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
@@ -104,10 +103,8 @@ class TinymistDownloadService {
         })
     }
 
-    @VisibleForTesting
-    fun resolveLatestDownloadUrl(assetName: String): String? {
-        // Use GitHub's redirect: /releases/latest/download/<asset> redirects to the actual file
-        val url = "$GITHUB_RELEASES_LATEST/download/$assetName"
+    fun resolveLatestDownloadUrl(baseUrl: String, assetName: String): String? {
+        val url = "$baseUrl/$assetName"
 
         // Verify the URL is valid by sending a HEAD request
         return try {
@@ -161,9 +158,17 @@ class TinymistDownloadService {
     }
 
     companion object {
-        private const val GITHUB_RELEASES_LATEST = "https://github.com/Myriad-Dreamin/tinymist/releases/latest"
-
         fun getInstance(): TinymistDownloadService =
             ApplicationManager.getApplication().getService(TinymistDownloadService::class.java)
+
+        internal fun unsupportedPlatformMessage(): String {
+            val os = System.getProperty("os.name")
+            val arch = System.getProperty("os.arch")
+            return "Your platform (os=$os, arch=$arch) is not fully supported. " +
+                    "The plugin requires both tinymist and typst, available on: " +
+                    "${PlatformConfig.supportedPlatformsDescription()}. " +
+                    "On other platforms, install the tools manually and set their paths " +
+                    "in Settings → Tools → Typst."
+        }
     }
 }

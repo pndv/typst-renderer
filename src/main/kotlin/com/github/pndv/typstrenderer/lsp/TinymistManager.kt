@@ -100,33 +100,22 @@ class TinymistManager {
         fun isArm64(): Boolean = osArch?.let { it == "aarch64" || it == "arm64" } ?: false
 
         /**
-         * Determines the GitHub release asset name for the current platform.
+         * Determines the GitHub release asset name for tinymist on the current platform.
+         * Returns null if the host platform is not in tinymist's supported matrix.
          */
         fun getPlatformAssetName(): String? {
-            return when {
-                isMacOS() && isArm64() -> "tinymist-darwin-arm64"
-                isMacOS() -> "tinymist-darwin-x64"
-                isLinux() && isArm64() -> "tinymist-linux-arm64"
-                isLinux() -> "tinymist-linux-x64"
-                isWindows() -> "tinymist-win32-x64.exe"
-                else -> null
-            }
+            val key = PlatformKey.currentHost(osName, osArch) ?: return null
+            return PlatformConfig.tinymist.assetFor(key)?.asset
         }
 
         /**
          * Determines the GitHub release asset name for the Typst CLI on the current platform.
          * Typst releases are compressed archives (.tar.xz on Unix, .zip on Windows).
+         * Returns null if the host platform is not in typst's supported matrix.
          */
         fun getTypstPlatformAssetName(): String? {
-            return when {
-                isMacOS() && isArm64() -> "typst-aarch64-apple-darwin.tar.xz"
-                isMacOS() -> "typst-x86_64-apple-darwin.tar.xz"
-                isLinux() && isArm64() -> "typst-aarch64-unknown-linux-musl.tar.xz"
-                isLinux() -> "typst-x86_64-unknown-linux-musl.tar.xz"
-                isWindows() && isArm64() -> "typst-aarch64-pc-windows-msvc.zip"
-                isWindows() -> "typst-x86_64-pc-windows-msvc.zip"
-                else -> null
-            }
+            val key = PlatformKey.currentHost(osName, osArch) ?: return null
+            return PlatformConfig.typst.assetFor(key)?.asset
         }
 
         /**
@@ -136,7 +125,7 @@ class TinymistManager {
          * On Windows, [File.canExecute] returns true for any readable file with certain
          * extensions, so we additionally verify the file has a recognized executable extension.
          */
-        private fun isBinaryExecutable(file: File): Boolean {
+        internal fun isBinaryExecutable(file: File): Boolean {
             if (!file.isFile) return false
             if (isWindows()) {
                 val ext = file.extension.lowercase()
@@ -164,7 +153,7 @@ class TinymistManager {
         /**
          * Windows-specific well-known install directories.
          */
-        private fun MutableList<String>.addWindowsDirs(home: File) {
+        internal fun MutableList<String>.addWindowsDirs(home: File) {
             // Cargo (Rust) — most common install method for both tinymist and typst
             add(File(home, ".cargo${File.separator}bin").absolutePath)
 
@@ -201,7 +190,7 @@ class TinymistManager {
         /**
          * macOS and Linux well-known install directories.
          */
-        private fun MutableList<String>.addUnixDirs(home: File) {
+        internal fun MutableList<String>.addUnixDirs(home: File) {
             // Cargo (Rust) — most common install method for both tinymist and typst
             add(File(home, ".cargo/bin").absolutePath)
 
