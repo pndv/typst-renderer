@@ -1,8 +1,8 @@
 # typst-renderer
 
 ![Build](https://github.com/pndv/typst-renderer/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
+[![Version](https://img.shields.io/jetbrains/plugin/v/31308.svg)](https://plugins.jetbrains.com/plugin/31308-typst-renderer)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/31308.svg)](https://plugins.jetbrains.com/plugin/31308-typst-renderer)
 
 <!-- Plugin description -->
 **Typst** support for IntelliJ-based IDEs — edit, preview, and compile [Typst](https://typst.app) documents without leaving your IDE.
@@ -32,9 +32,11 @@ No manual installation of external tools is required — the plugin will automat
 
 - Using JetBrains Marketplace:
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/31308-typst-renderer) and install it by clicking
+  the <kbd>Install to ...</kbd> button in case your IDE is running.
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from JetBrains Marketplace and install it manually using
+  You can also download the [latest release](https://plugins.jetbrains.com/plugin/31308-typst-renderer/versions) from
+  JetBrains Marketplace and install it manually using
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
 
 - Manually:

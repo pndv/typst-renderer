@@ -17,13 +17,9 @@ import com.intellij.platform.lsp.api.LspServerManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.refactoring.rename.RenameHandler
-import org.eclipse.lsp4j.Position
-import org.eclipse.lsp4j.PrepareRenameParams
-import org.eclipse.lsp4j.RenameParams
-import org.eclipse.lsp4j.TextDocumentIdentifier
-import org.eclipse.lsp4j.TextEdit
-import org.eclipse.lsp4j.WorkspaceEdit
+import org.eclipse.lsp4j.*
 import java.net.URI
+import java.nio.file.Paths
 
 private val LOG = logger<TypstLspRenameHandler>()
 
@@ -51,6 +47,15 @@ class TypstLspRenameHandler : RenameHandler {
             return
         }
 
+        performRenameWithServer(project, editor, virtualFile, server)
+    }
+
+    internal fun performRenameWithServer(
+        project: Project,
+        editor: Editor,
+        virtualFile: VirtualFile,
+        server: LspServer,
+    ) {
         val offset = editor.caretModel.offset
         val position = offsetToLspPosition(editor.document, offset)
         val textDocId = TextDocumentIdentifier(virtualFile.url.toLspUri())
@@ -122,7 +127,7 @@ class TypstLspRenameHandler : RenameHandler {
     /**
      * Converts an editor offset to an LSP Position (0-based line, 0-based character).
      */
-    private fun offsetToLspPosition(document: Document, offset: Int): Position {
+    internal fun offsetToLspPosition(document: Document, offset: Int): Position {
         val line = document.getLineNumber(offset)
         val lineStartOffset = document.getLineStartOffset(line)
         val character = offset - lineStartOffset
@@ -143,10 +148,10 @@ class TypstLspRenameHandler : RenameHandler {
      * Extracts the current symbol name from the prepareRename result.
      * The result can be a Range, PrepareRenameResult (with placeholder), or PrepareRenameDefaultBehavior.
      */
-    private fun extractCurrentName(result: Any, document: Document): String? {
+    internal fun extractCurrentName(result: Any, document: Document): String? {
         return when (result) {
-            is org.eclipse.lsp4j.PrepareRenameResult -> result.placeholder
-            is org.eclipse.lsp4j.Range -> {
+            is PrepareRenameResult -> result.placeholder
+            is Range -> {
                 val start = document.getLineStartOffset(result.start.line) + result.start.character
                 val end = document.getLineStartOffset(result.end.line) + result.end.character
                 document.getText(com.intellij.openapi.util.TextRange(start, end))
@@ -158,7 +163,7 @@ class TypstLspRenameHandler : RenameHandler {
     /**
      * Fallback: get the word under the cursor.
      */
-    private fun getWordAtCaret(editor: Editor): String {
+    internal fun getWordAtCaret(editor: Editor): String {
         val offset = editor.caretModel.offset
         val document = editor.document
         val text = document.charsSequence
@@ -174,7 +179,7 @@ class TypstLspRenameHandler : RenameHandler {
     /**
      * Applies an LSP WorkspaceEdit to the project's documents.
      */
-    private fun applyWorkspaceEdit(project: Project, edit: WorkspaceEdit) {
+    internal fun applyWorkspaceEdit(project: Project, edit: WorkspaceEdit) {
         WriteCommandAction.runWriteCommandAction(project, "Rename Symbol", null, {
             // Handle the `changes` field (Map<String, List<TextEdit>>)
             edit.changes?.forEach { (uri, textEdits) ->
@@ -196,7 +201,7 @@ class TypstLspRenameHandler : RenameHandler {
      * Applies a list of LSP TextEdits to the document identified by the URI.
      * Edits are applied in reverse order (bottom-to-top) so offsets remain valid.
      */
-    private fun applyTextEdits(uri: String, edits: List<TextEdit>) {
+    internal fun applyTextEdits(uri: String, edits: List<TextEdit>) {
         val virtualFile = findVirtualFile(uri) ?: run {
             LOG.warn("Could not find file for URI: $uri")
             return
@@ -220,10 +225,9 @@ class TypstLspRenameHandler : RenameHandler {
     /**
      * Resolves an LSP URI to an IntelliJ VirtualFile.
      */
-    private fun findVirtualFile(uri: String): VirtualFile? {
+    internal fun findVirtualFile(uri: String): VirtualFile? {
         return try {
-            val path = URI(uri).path
-            VirtualFileManager.getInstance().findFileByUrl("file://$path")
+            VirtualFileManager.getInstance().findFileByNioPath(Paths.get(URI(uri)))
         } catch (e: Exception) {
             LOG.warn("Failed to resolve URI: $uri", e)
             null

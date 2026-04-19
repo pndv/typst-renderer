@@ -13,7 +13,8 @@ class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
     data class State(
         var tinymistPath: String = "",
         var typstPath: String = "",
-        var autoCompileOnSave: Boolean = false
+        var autoCompileOnSave: Boolean = false,
+        var rememberPreviewScrollAcrossRestart: Boolean = false
     )
 
     private var state = State()
@@ -29,6 +30,10 @@ class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
     var autoCompileOnSave: Boolean
         get() = state.autoCompileOnSave
         set(value) { state.autoCompileOnSave = value }
+
+    var rememberPreviewScrollAcrossRestart: Boolean
+        get() = state.rememberPreviewScrollAcrossRestart
+        set(value) { state.rememberPreviewScrollAcrossRestart = value }
 
     override fun getState(): State = state
 

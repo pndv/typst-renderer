@@ -17,6 +17,7 @@ class TypstSettingsConfigurable : Configurable {
     private var tinymistPath = settings.tinymistPath
     private var typstPath = settings.typstPath
     private var autoCompileOnSave = settings.autoCompileOnSave
+    private var rememberPreviewScrollAcrossRestart = settings.rememberPreviewScrollAcrossRestart
     private var tinymistStatusLabel: JBLabel? = null
     private var typstStatusLabel: JBLabel? = null
 
@@ -67,17 +68,30 @@ class TypstSettingsConfigurable : Configurable {
                     .bindSelected(::autoCompileOnSave)
             }
         }
+        group("Preview") {
+            row {
+                checkBox("Remember PDF preview scroll position across editor restarts")
+                    .bindSelected(::rememberPreviewScrollAcrossRestart)
+                    .comment(
+                        "When enabled, reopening a .typ file restores the preview to the page and " +
+                                "scroll offset you were viewing. Scroll position is always preserved " +
+                                "across recompilation within a session regardless of this setting."
+                    )
+            }
+        }
     }
 
     override fun isModified(): Boolean =
         tinymistPath != settings.tinymistPath ||
                 typstPath != settings.typstPath ||
-                autoCompileOnSave != settings.autoCompileOnSave
+                autoCompileOnSave != settings.autoCompileOnSave ||
+                rememberPreviewScrollAcrossRestart != settings.rememberPreviewScrollAcrossRestart
 
     override fun apply() {
         settings.tinymistPath = tinymistPath
         settings.typstPath = typstPath
         settings.autoCompileOnSave = autoCompileOnSave
+        settings.rememberPreviewScrollAcrossRestart = rememberPreviewScrollAcrossRestart
         // Refresh status labels after applying new paths
         tinymistStatusLabel?.text = getTinymistStatusText()
         typstStatusLabel?.text = getTypstStatusText()
@@ -87,6 +101,7 @@ class TypstSettingsConfigurable : Configurable {
         tinymistPath = settings.tinymistPath
         typstPath = settings.typstPath
         autoCompileOnSave = settings.autoCompileOnSave
+        rememberPreviewScrollAcrossRestart = settings.rememberPreviewScrollAcrossRestart
         tinymistStatusLabel?.text = getTinymistStatusText()
         typstStatusLabel?.text = getTypstStatusText()
     }

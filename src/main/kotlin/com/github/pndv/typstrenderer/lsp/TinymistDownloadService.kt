@@ -6,11 +6,9 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.util.io.HttpRequests
-import org.jetbrains.annotations.VisibleForTesting
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -37,7 +35,13 @@ class TinymistDownloadService {
             return
         }
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Downloading Tinymist language server", true) {
+        // Use Task.Backgroundable.queue() rather than ProgressManager.getInstance().run(task).
+        // The latter, when called off the EDT (e.g. inside an LSP-framework read action),
+        // synchronously invokeAndWait()s onto the EDT to set up the indicator UI, which
+        // IntelliJ's deadlock detector rightly refuses (read-action + invokeAndWait is a
+        // classic deadlock pattern). queue() schedules asynchronously and is thread-safe
+        // from any caller context.
+        object : Task.Backgroundable(project, "Downloading Tinymist language server", true) {
             override fun run(indicator: ProgressIndicator) {
                 isDownloading = true
                 try {
@@ -47,13 +51,16 @@ class TinymistDownloadService {
 
                     val assetName = TinymistManager.getPlatformAssetName()
                     if (assetName == null) {
-                        notifyError(project, "Unsupported platform: ${System.getProperty("os.name")} ${System.getProperty("os.arch")}")
+                        notifyError(project, unsupportedPlatformMessage())
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
 
-                    // Resolve the latest release download URL
-                    val downloadUrl = resolveLatestDownloadUrl(assetName)
+                    // Resolve the latest release download URL.
+                    // PlatformConfig.tinymistBaseUrl resolves to the real GitHub releases
+                    // URL in production and to a test-only override (e.g. a MockWebServer)
+                    // when one has been set — keeps tests offline and hermetic.
+                    val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.tinymistBaseUrl, assetName)
                     if (downloadUrl == null) {
                         notifyError(project, "Could not find tinymist release for this platform ($assetName)")
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
@@ -101,13 +108,11 @@ class TinymistDownloadService {
                     isDownloading = false
                 }
             }
-        })
+        }.queue()
     }
 
-    @VisibleForTesting
-    fun resolveLatestDownloadUrl(assetName: String): String? {
-        // Use GitHub's redirect: /releases/latest/download/<asset> redirects to the actual file
-        val url = "$GITHUB_RELEASES_LATEST/download/$assetName"
+    fun resolveLatestDownloadUrl(baseUrl: String, assetName: String): String? {
+        val url = "$baseUrl/$assetName"
 
         // Verify the URL is valid by sending a HEAD request
         return try {
@@ -133,15 +138,7 @@ class TinymistDownloadService {
                 .forceHttps(true)
                 .saveToFile(tempFile, indicator)
 
-            // Atomic-ish move: delete target first, then rename temp
-            if (target.exists()) {
-                target.delete()
-            }
-            if (!tempFile.renameTo(target)) {
-                // Fallback: copy + delete
-                tempFile.copyTo(target, overwrite = true)
-                tempFile.delete()
-            }
+            atomicMove(tempFile, target)
         } finally {
             // Clean up temp file if it still exists (e.g., on error)
             if (tempFile.exists()) {
@@ -161,9 +158,32 @@ class TinymistDownloadService {
     }
 
     companion object {
-        private const val GITHUB_RELEASES_LATEST = "https://github.com/Myriad-Dreamin/tinymist/releases/latest"
-
         fun getInstance(): TinymistDownloadService =
             ApplicationManager.getApplication().getService(TinymistDownloadService::class.java)
+
+        /**
+         * Moves [tempFile] to [target], overwriting if [target] exists.
+         * Tries a fast rename first, falling back to copy + delete when the
+         * rename isn't possible (e.g. across filesystems).
+         */
+        internal fun atomicMove(tempFile: File, target: File) {
+            if (target.exists()) {
+                target.delete()
+            }
+            if (!tempFile.renameTo(target)) {
+                tempFile.copyTo(target, overwrite = true)
+                tempFile.delete()
+            }
+        }
+
+        internal fun unsupportedPlatformMessage(): String {
+            val os = System.getProperty("os.name")
+            val arch = System.getProperty("os.arch")
+            return "Your platform (os=$os, arch=$arch) is not fully supported. " +
+                    "The plugin requires both tinymist and typst, available on: " +
+                    "${PlatformConfig.supportedPlatformsDescription()}. " +
+                    "On other platforms, install the tools manually and set their paths " +
+                    "in Settings → Tools → Typst."
+        }
     }
 }

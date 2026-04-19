@@ -5,7 +5,9 @@
 ## [Unreleased]
 
 ## [0.0.1] - 2026-04-15
+
 ### Added
+
 - Typst (`.typ`) file type recognition with dedicated file icon
 - Syntax highlighting via token boundaries
 - Comment toggling with <kbd>Ctrl+/</kbd> and <kbd>Ctrl+Shift+/</kbd>
@@ -20,3 +22,7 @@
 - Binary resolution from user-configured paths, system PATH, well-known install directories (Cargo, Homebrew, Scoop, Nix, Chocolatey), and plugin data directory
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
+
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.0.1...HEAD
+
+[0.0.1]: https://github.com/pndv/typst-renderer/commits/0.0.1

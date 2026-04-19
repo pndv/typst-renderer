@@ -10,7 +10,6 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.util.io.HttpRequests
-import org.jetbrains.annotations.VisibleForTesting
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -52,12 +51,12 @@ class TypstDownloadService {
 
                     val assetName = TinymistManager.getTypstPlatformAssetName()
                     if (assetName == null) {
-                        notifyError(project, "Unsupported platform: ${System.getProperty("os.name")} ${System.getProperty("os.arch")}")
+                        notifyError(project, TinymistDownloadService.unsupportedPlatformMessage())
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
 
-                    val downloadUrl = resolveLatestDownloadUrl(assetName)
+                    val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.typst.baseUrl, assetName)
                     if (downloadUrl == null) {
                         notifyError(project, "Could not find Typst release for this platform ($assetName)")
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
@@ -119,9 +118,8 @@ class TypstDownloadService {
         })
     }
 
-    @VisibleForTesting
-    fun resolveLatestDownloadUrl(assetName: String): String? {
-        val url = "$GITHUB_RELEASES_LATEST/download/$assetName"
+    fun resolveLatestDownloadUrl(baseUrl: String, assetName: String): String? {
+        val url = "$baseUrl/$assetName"
 
         return try {
             HttpRequests.head(url)
@@ -145,13 +143,7 @@ class TypstDownloadService {
                 .forceHttps(true)
                 .saveToFile(tempFile, indicator)
 
-            if (target.exists()) {
-                target.delete()
-            }
-            if (!tempFile.renameTo(target)) {
-                tempFile.copyTo(target, overwrite = true)
-                tempFile.delete()
-            }
+            TinymistDownloadService.atomicMove(tempFile, target)
         } finally {
             if (tempFile.exists()) {
                 tempFile.delete()
@@ -159,7 +151,7 @@ class TypstDownloadService {
         }
     }
 
-    private fun extractTypstBinary(archiveFile: File, targetBinary: File) {
+    internal fun extractTypstBinary(archiveFile: File, targetBinary: File) {
         if (TinymistManager.isWindows()) {
             extractFromZip(archiveFile, targetBinary)
         } else {
@@ -171,7 +163,7 @@ class TypstDownloadService {
      * Extracts the typst binary from a .tar.xz archive using the system `tar` command.
      * The archive structure is: {dirname}/typst
      */
-    private fun extractFromTarXz(archiveFile: File, targetBinary: File) {
+    internal fun extractFromTarXz(archiveFile: File, targetBinary: File) {
         val tempExtractDir = File(archiveFile.parent, "typst-extract-tmp")
         tempExtractDir.mkdirs()
         try {
@@ -201,7 +193,7 @@ class TypstDownloadService {
      * Extracts the typst.exe binary from a .zip archive using Java's built-in ZipInputStream.
      * The archive structure is: {dirname}/typst.exe
      */
-    private fun extractFromZip(archiveFile: File, targetBinary: File) {
+    internal fun extractFromZip(archiveFile: File, targetBinary: File) {
         ZipInputStream(archiveFile.inputStream().buffered()).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
@@ -229,8 +221,6 @@ class TypstDownloadService {
     }
 
     companion object {
-        private const val GITHUB_RELEASES_LATEST = "https://github.com/typst/typst/releases/latest"
-
         fun getInstance(): TypstDownloadService =
             ApplicationManager.getApplication().getService(TypstDownloadService::class.java)
     }

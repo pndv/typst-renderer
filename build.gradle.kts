@@ -1,6 +1,10 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import java.io.InputStream
+import java.net.URI
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 
 plugins {
     id("java") // Java support
@@ -40,10 +44,13 @@ repositories {
 
 // Dependencies are managed with Gradle version catalogue - read more: https://docs.gradle.org/current/userguide/version_catalogs.html
 dependencies {
-    testImplementation(platform(libs.junit.bom))
-    testImplementation(libs.junit.jupiter.api)
-    testRuntimeOnly(libs.junit.jupiter.engine)
+//    testImplementation(platform(libs.junit.bom))
+//    testImplementation(libs.junit.jupiter.api)
+//    testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.junit4)
+    testImplementation(libs.mockwebserver) {
+        exclude(group = "org.jetbrains.kotlin")
+    }
     testImplementation(libs.opentest4j)
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
@@ -154,6 +161,76 @@ tasks {
 
     publishPlugin {
         dependsOn(patchChangelog)
+    }
+
+    test {
+        useJUnit()
+    }
+
+    // --- PDF.js vendoring -------------------------------------------------
+    // Downloads the Mozilla PDF.js release zip once and extracts a whitelisted
+    // subset into src/main/resources/pdfjs. The output is committed to git so
+    // casual contributors don't need network access to build; this task is
+    // only re-run when bumping `pdfjsVersion`.
+    val pdfjsVersion = libs.versions.pdfjs.get()
+    val pdfjsOutDir = layout.projectDirectory.dir("src/main/resources/pdfjs")
+
+    register("downloadPdfJs") {
+        description = "Download and vendor PDF.js $pdfjsVersion into src/main/resources/pdfjs."
+        // Capture file references outside doLast to avoid accessing `project` from the
+        // task action (which would break Gradle's configuration cache).
+        val marker = pdfjsOutDir.file(".version").asFile
+        val outDirFile = pdfjsOutDir.asFile
+        val tempZipFile = layout.buildDirectory.file("pdfjs/pdfjs-$pdfjsVersion.zip").get().asFile
+        val version = pdfjsVersion
+        outputs.file(marker)
+        doLast {
+            if (marker.exists() && marker.readText().trim() == version) {
+                logger.lifecycle("PDF.js $version already vendored.")
+                return@doLast
+            }
+            val zipUrl =
+                "https://github.com/mozilla/pdf.js/releases/download/v$version/pdfjs-$version-dist.zip"
+            val tempZip = tempZipFile
+            tempZip.parentFile.mkdirs()
+            logger.lifecycle("Downloading $zipUrl")
+            val stream: InputStream = URI(zipUrl).toURL().openStream()
+            stream.use { input ->
+                tempZip.outputStream().use { out -> input.copyTo(out) }
+            }
+            val outDir = outDirFile
+            outDir.deleteRecursively()
+            outDir.mkdirs()
+            val keepExt = setOf(
+                "html", "css", "mjs", "js", "map", "json", "wasm",
+                "png", "svg", "gif", "properties", "ftl", "bcmap", "pfb", "icc"
+            )
+            val zip: ZipFile = ZipFile(tempZip)
+            try {
+                val entries: List<ZipEntry> = zip.entries().toList()
+                for (e in entries) {
+                    if (e.isDirectory) continue
+                    if (!(e.name.startsWith("web/") || e.name.startsWith("build/"))) continue
+                    // Ship all PDF.js locales (~1 MB) so the viewer's UI chrome
+                    // (toolbar tooltips, page/zoom labels) matches the user's IDE
+                    // language. Without this, non-English IDE users see an English
+                    // PDF preview toolbar inside an otherwise localized IDE, and any
+                    // locale not bundled here would 404 and break PDF.js rendering.
+                    val ext = e.name.substringAfterLast('.', "")
+                    if (ext.isNotEmpty() && ext !in keepExt) continue
+                    val dest = File(outDir, e.name)
+                    dest.parentFile.mkdirs()
+                    val entryStream: InputStream = zip.getInputStream(e)
+                    entryStream.use { input ->
+                        dest.outputStream().use { out -> input.copyTo(out) }
+                    }
+                }
+            } finally {
+                zip.close()
+            }
+            marker.writeText(version)
+            logger.lifecycle("PDF.js vendored to ${outDir.absolutePath}")
+        }
     }
 }
 
