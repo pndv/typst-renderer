@@ -46,6 +46,15 @@ class TypstLspRenameHandler : RenameHandler {
             return
         }
 
+        performRenameWithServer(project, editor, virtualFile, server)
+    }
+
+    internal fun performRenameWithServer(
+        project: Project,
+        editor: Editor,
+        virtualFile: VirtualFile,
+        server: LspServer,
+    ) {
         val offset = editor.caretModel.offset
         val position = offsetToLspPosition(editor.document, offset)
         val textDocId = TextDocumentIdentifier(virtualFile.url.toLspUri())

@@ -5,7 +5,6 @@ import com.github.pndv.typstrenderer.lsp.TinymistManager.Companion.resolveBinary
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assume.assumeFalse
 import org.junit.Before
 import org.junit.Test
 import java.io.File
@@ -19,10 +18,8 @@ import java.nio.file.Files
  * testing the pure helper gives us stage-by-stage priority coverage without
  * needing a `BasePlatformTestCase` fixture.
  *
- * Unix-only — creating "executable" files with `setExecutable(true)` is the
- * simplest fixture, and `isBinaryExecutable` on Windows additionally requires
- * a recognized extension (.exe/.cmd/.bat/.com), which would complicate these
- * tests. Skipped on Windows hosts.
+ * Cross-platform: on Windows [com.github.pndv.typstrenderer.lsp.TinymistManager.Companion.isBinaryExecutable] recognises the `.exe` extension,
+ * so [executableFile] appends it automatically. On Unix the POSIX execute bit is set.
  */
 class BinaryResolutionTest {
 
@@ -30,7 +27,6 @@ class BinaryResolutionTest {
 
     @Before
     fun setUp() {
-        assumeFalse("Unix-only — depends on POSIX execute bit semantics", isWindows())
         workDir = Files.createTempDirectory("binary-resolve-test").toFile()
     }
 
@@ -39,11 +35,13 @@ class BinaryResolutionTest {
         workDir?.deleteRecursively()
     }
 
-    private fun executableFile(name: String): File =
-        File(workDir, name).apply {
-            writeText("#!/bin/sh\n")
-            setExecutable(true, false)
+    private fun executableFile(name: String): File {
+        val fileName = if (isWindows()) "$name.exe" else name
+        return File(workDir, fileName).apply {
+            writeText(if (isWindows()) "" else "#!/bin/sh\n")
+            if (!isWindows()) setExecutable(true, false)
         }
+    }
 
     // ---- D.46  User-configured path wins ----
 

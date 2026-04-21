@@ -4,15 +4,23 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.impl.DocumentImpl
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.TestDialog
+import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.platform.lsp.api.LspServer
+import com.intellij.platform.lsp.api.LspServerDescriptor
+import com.intellij.platform.lsp.api.LspServerState
+import com.intellij.platform.lsp.api.LspServerSupportProvider
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import org.eclipse.lsp4j.Position
-import org.eclipse.lsp4j.PrepareRenameResult
-import org.eclipse.lsp4j.Range
-import org.eclipse.lsp4j.TextEdit
+import org.eclipse.lsp4j.*
+import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.nio.file.Files
+import java.util.concurrent.CompletableFuture
 
 /**
  * Unit tests for [TypstLspRenameHandler].
@@ -158,7 +166,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         try {
             Files.writeString(tempFile, "foo bar foo baz foo")
             val virtualFile =
-                ApplicationManager.getApplication().runWriteAction<com.intellij.openapi.vfs.VirtualFile?> {
+                ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
                     LocalFileSystem.getInstance().refreshAndFindFileByNioFile(tempFile)
                 } ?: fail("Could not resolve temp file in VFS")
 
@@ -177,7 +185,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
             }
 
             val document =
-                FileDocumentManager.getInstance().getDocument(virtualFile as com.intellij.openapi.vfs.VirtualFile)!!
+                FileDocumentManager.getInstance().getDocument(virtualFile as VirtualFile)!!
             assertEquals("XXX bar YYY baz ZZZ", document.text)
         } finally {
             Files.deleteIfExists(tempFile)
@@ -190,4 +198,217 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
             handler.applyTextEdits("file:///nonexistent/path/foo.typ", emptyList())
         }
     }
+
+    // ---- performRenameWithServer (A.4–A.12) ----
+
+    override fun tearDown() {
+        TestDialogManager.setTestDialog(null)
+        TestDialogManager.setTestInputDialog(null)
+        super.tearDown()
+    }
+
+    // A.4 — single-file WorkspaceEdit via `changes` map applies correctly
+    fun testRename_singleFileEdit_appliesChanges() {
+        val tempFile = Files.createTempFile("typst-rename-test", ".typ")
+        try {
+            Files.writeString(tempFile, "#let foo = 1")
+            val vf = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(tempFile)
+            } ?: fail("Could not resolve temp file in VFS")
+
+            myFixture.configureByText("current.typ", "#let foo<caret> = 1")
+
+            val uri = "file://" + tempFile.toAbsolutePath().toString().replace('\\', '/')
+            val workspaceEdit = WorkspaceEdit(
+                mapOf(
+                    uri to listOf(TextEdit(Range(Position(0, 5), Position(0, 8)), "bar"))
+                )
+            )
+            val fakeServer = FakeLspServer(
+                PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo"),
+                workspaceEdit,
+            )
+            TestDialogManager.setTestInputDialog { "bar" }
+
+            handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+
+            val doc = FileDocumentManager.getInstance().getDocument(vf as VirtualFile)!!
+            assertEquals("#let bar = 1", doc.text)
+        } finally {
+            Files.deleteIfExists(tempFile)
+        }
+    }
+
+    // A.5 — multi-file WorkspaceEdit via `documentChanges` applies to both files
+    fun testRename_multiFileViaDocumentChanges_appliesAllEdits() {
+        val file1 = Files.createTempFile("typst-rename-a", ".typ")
+        val file2 = Files.createTempFile("typst-rename-b", ".typ")
+        try {
+            Files.writeString(file1, "#let foo = 1")
+            Files.writeString(file2, "foo + 2")
+            val vf1 = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file1)
+            } ?: fail("Could not resolve file1 in VFS")
+            val vf2 = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file2)
+            } ?: fail("Could not resolve file2 in VFS")
+
+            myFixture.configureByText("current.typ", "#let foo<caret> = 1")
+
+            val uri1 = "file://" + file1.toAbsolutePath().toString().replace('\\', '/')
+            val uri2 = "file://" + file2.toAbsolutePath().toString().replace('\\', '/')
+            val workspaceEdit = WorkspaceEdit()
+            workspaceEdit.documentChanges = listOf(
+                Either.forLeft(
+                    TextDocumentEdit(
+                        VersionedTextDocumentIdentifier(uri1, 0),
+                        listOf(TextEdit(Range(Position(0, 5), Position(0, 8)), "bar")),
+                    )
+                ),
+                Either.forLeft(
+                    TextDocumentEdit(
+                        VersionedTextDocumentIdentifier(uri2, 0),
+                        listOf(TextEdit(Range(Position(0, 0), Position(0, 3)), "bar")),
+                    )
+                ),
+            )
+            val fakeServer = FakeLspServer(
+                PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo"),
+                workspaceEdit,
+            )
+            TestDialogManager.setTestInputDialog { "bar" }
+
+            handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+
+            val doc1 = FileDocumentManager.getInstance().getDocument(vf1 as VirtualFile)!!
+            val doc2 = FileDocumentManager.getInstance().getDocument(vf2 as VirtualFile)!!
+            assertEquals("#let bar = 1", doc1.text)
+            assertEquals("bar + 2", doc2.text)
+        } finally {
+            Files.deleteIfExists(file1)
+            Files.deleteIfExists(file2)
+        }
+    }
+
+    // A.7 — user cancels the input dialog → no rename request sent, document unchanged
+    fun testRename_userCancelsDialog_noChangesApplied() {
+        myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val fakeServer = FakeLspServer(
+            PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo"),
+        )
+        TestDialogManager.setTestInputDialog { null }
+
+        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+
+        assertEquals(1, fakeServer.callCount)  // only prepareRename was called
+        assertEquals("#let foo = 1", myFixture.editor.document.text)
+    }
+
+    // A.8 — prepareRename returns null (server can't rename here) → info shown, no changes
+    fun testRename_prepareRenameReturnsNull_showsInfoNoChanges() {
+        myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val fakeServer = FakeLspServer(null)
+        TestDialogManager.setTestDialog(TestDialog.OK)
+
+        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+
+        assertEquals(1, fakeServer.callCount)
+        assertEquals("#let foo = 1", myFixture.editor.document.text)
+    }
+
+    // A.9 — rename request throws (e.g. timeout) → error dialog shown, no changes
+    fun testRename_renameRequestThrows_showsErrorNoChanges() {
+        myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val fakeServer = FakeLspServer(
+            PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo"),
+            RuntimeException("timeout"),
+        )
+        TestDialogManager.setTestDialog(TestDialog.OK)
+        TestDialogManager.setTestInputDialog { "bar" }
+
+        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+
+        assertEquals(2, fakeServer.callCount)
+        assertEquals("#let foo = 1", myFixture.editor.document.text)
+    }
+
+    // A.10 — rename returns null workspace edit → info shown, no changes
+    fun testRename_renameReturnsNullWorkspaceEdit_showsInfoNoChanges() {
+        myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val fakeServer = FakeLspServer(
+            PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo"),
+            null,
+        )
+        TestDialogManager.setTestDialog(TestDialog.OK)
+        TestDialogManager.setTestInputDialog { "bar" }
+
+        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+
+        assertEquals(2, fakeServer.callCount)
+        assertEquals("#let foo = 1", myFixture.editor.document.text)
+    }
+
+    // A.11 — documentChanges containing resource operations (file rename/create) are silently skipped
+    fun testRename_workspaceEditWithResourceOperations_skipsUnsupportedOps() {
+        myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val workspaceEdit = WorkspaceEdit()
+        workspaceEdit.documentChanges = listOf(
+            Either.forRight(RenameFile("file:///old.typ", "file:///new.typ")),
+        )
+        val fakeServer = FakeLspServer(
+            PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo"),
+            workspaceEdit,
+        )
+        TestDialogManager.setTestInputDialog { "bar" }
+
+        // Must not throw; resource ops are silently skipped
+        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+    }
+
+    // A.12 — entering the same name as current → treated as cancel, no rename sent
+    fun testRename_sameNameEntered_treatedAsCancel() {
+        myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val fakeServer = FakeLspServer(
+            PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo"),
+        )
+        TestDialogManager.setTestInputDialog { "foo" }  // same as current
+
+        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+
+        assertEquals(1, fakeServer.callCount)  // only prepareRename called
+    }
+}
+
+/**
+ * Test double for [LspServer]. Responses are consumed in call order.
+ * Store a [Throwable] in [responses] to simulate a failed/timeout request.
+ */
+private class FakeLspServer(private vararg val responses: Any?) : LspServer {
+
+    var callCount = 0
+        private set
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <Lsp4jResponse> sendRequestSync(
+        timeoutMs: Int,
+        lsp4jSender: (org.eclipse.lsp4j.services.LanguageServer) -> CompletableFuture<Lsp4jResponse>,
+    ): Lsp4jResponse? {
+        val response = responses.getOrNull(callCount++)
+        if (response is Throwable) throw response
+        return response as Lsp4jResponse?
+    }
+
+    override val providerClass: Class<out LspServerSupportProvider>
+        get() = TinymistLspServerSupportProvider::class.java
+    override val project: Project get() = throw UnsupportedOperationException()
+    override val descriptor: LspServerDescriptor get() = throw UnsupportedOperationException()
+    override val state: LspServerState get() = LspServerState.Running
+    override val initializeResult: InitializeResult? get() = null
+    override fun sendNotification(lsp4jSender: (org.eclipse.lsp4j.services.LanguageServer) -> Unit) {}
+    override suspend fun <Lsp4jResponse> sendRequest(
+        lsp4jSender: (org.eclipse.lsp4j.services.LanguageServer) -> CompletableFuture<Lsp4jResponse>
+    ): Lsp4jResponse? = null
+
+    override fun getDocumentIdentifier(file: VirtualFile) = TextDocumentIdentifier(file.url)
+    override fun getDocumentVersion(document: Document) = 0
 }
