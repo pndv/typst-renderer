@@ -2,6 +2,7 @@ package com.github.pndv.typstrenderer.editor
 
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
+import com.github.pndv.typstrenderer.settings.TypstSettingsState
 import com.github.pndv.typstrenderer.theme.TypstThemeListener
 import com.github.pndv.typstrenderer.theme.TypstThemeService
 import com.intellij.execution.configurations.GeneralCommandLine
@@ -16,6 +17,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorState
+import com.intellij.openapi.fileEditor.FileEditorStateLevel
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
@@ -28,6 +30,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
+import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.io.BaseOutputReader
 import org.cef.handler.CefLoadHandlerAdapter
@@ -66,6 +69,13 @@ class TypstFilePreviewer(
 
     private val isDark get() = EditorColorsManager.getInstance().isDarkEditor
 
+    /** Last viewport reported by Chromium's PDF viewer via postMessage. Reapplied on every reload. */
+    @Volatile
+    private var lastViewport: PdfViewportState? = null
+
+    /** JS→Kotlin bridge: JS calls this with `{"page":N,"yOffset":D}` each time the viewport changes. */
+    private val viewportQuery: JBCefJSQuery? = browser?.let { JBCefJSQuery.create(it as com.intellij.ui.jcef.JBCefBrowserBase) }
+
     init {
         // Output PDF goes next to the source file in a temp dir to avoid polluting the project
         val tempDir = File(System.getProperty("java.io.tmpdir"), "typst-preview")
@@ -75,16 +85,36 @@ class TypstFilePreviewer(
 
         if (jcefSupported) {
             browser?.let { Disposer.register(this, it) }
-            installDarkModeInjector()
+            viewportQuery?.let { q ->
+                Disposer.register(this, q)
+                q.addHandler { json ->
+                    log.info("[viewport] payload from JS: $json")
+                    val parsed = PdfViewportState.fromJson(json)
+                    if (parsed != null) {
+                        lastViewport = parsed
+                        log.info("[viewport] lastViewport updated -> page=${parsed.page}, yOffset=${parsed.yOffset}")
+                    } else {
+                        log.info("[viewport] payload did NOT parse as viewport state — treating as diagnostic only")
+                    }
+                    null
+                }
+            }
+            installLoadEndHandlers()
             listenForThemeChanges()
             startWatching()
             listenForPdfChanges()
         }
     }
 
-    /** Injects `color-scheme: dark` into every loaded page when the IDE is in dark mode.
-     *  This makes Chromium's built-in PDF viewer switch to its dark appearance. */
-    private fun installDarkModeInjector() {
+    /**
+     * Installs the `onLoadEnd` handler that runs every time a page finishes loading in the browser.
+     * Two jobs:
+     *  1. Inject `color-scheme: dark` so Chromium's built-in PDF viewer picks up dark mode.
+     *  2. Install a `message` listener that captures viewport updates from the PDF viewer
+     *     (page + vertical scroll) and reports them to Kotlin via [viewportQuery].
+     */
+    private fun installLoadEndHandlers() {
+        log.debug("Installing onLoadEnd handlers")
         val cefBrowser = browser?.cefBrowser ?: return
         browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
             override fun onLoadEnd(
@@ -98,8 +128,90 @@ class TypstFilePreviewer(
                         b.url, 0
                     )
                 }
+                viewportQuery?.let { q ->
+                    b.executeJavaScript(buildViewportCaptureScript(q), b.url, 0)
+                }
             }
         }, cefBrowser)
+    }
+
+    /**
+     * Builds the JS that listens for Chromium PDF viewer viewport messages and forwards them
+     * to Kotlin. Throttled to ~150ms so rapid scrolls don't flood the bridge.
+     *
+     * Chromium's built-in PDF viewer posts messages of the form
+     * `{type: 'viewport', pageNumber: N, ...}` to its host window on scroll/page changes.
+     * Event shape may vary by Chromium version; the narrow `type === 'viewport'` guard
+     * keeps this safe — worst case we miss updates and the fragment is omitted.
+     */
+    private fun buildViewportCaptureScript(q: JBCefJSQuery): String {
+        // `q.inject('payload')` produces the JS snippet that invokes the Kotlin handler.
+        val reportCall = q.inject("payload")
+        val jScript = """
+            (function() {
+              if (window.__typstViewportHooked) return;
+              window.__typstViewportHooked = true;
+              var lastSent = 0;
+              var pending = null;
+              function send(obj) {
+                var payload = JSON.stringify(obj);
+                $reportCall
+              }
+              function flushViewport() {
+                if (!pending) return;
+                var obj = pending;
+                pending = null;
+                lastSent = Date.now();
+                send(obj);
+              }
+              // === DIAGNOSTIC: log every postMessage event so we can see the real schema ===
+              window.addEventListener('message', function(e) {
+                try {
+                  var d = e && e.data;
+                  var diag = {
+                    __diag: true,
+                    dataType: typeof d,
+                    type: (d && d.type) || null,
+                    keys: (d && typeof d === 'object') ? Object.keys(d).slice(0, 20) : [],
+                    preview: (typeof d === 'string') ? d.slice(0, 200) : null
+                  };
+                  send(diag);
+                } catch (err) { /* ignore */ }
+
+                // === Real capture: only act on viewport-typed messages ===
+                var d2 = e && e.data;
+                if (!d2 || d2.type !== 'viewport') return;
+                var page = d2.pageNumber;
+                if (typeof page !== 'number') return;
+                var y = (d2.viewportHeight && d2.pageY) ? d2.pageY
+                      : (typeof d2.verticalScroll === 'number') ? d2.verticalScroll
+                      : 0;
+                pending = { page: page, yOffset: y };
+                var now = Date.now();
+                if (now - lastSent >= 150) flushViewport();
+                else setTimeout(flushViewport, 150 - (now - lastSent));
+              });
+              // === DIAGNOSTIC: also scan DOM for a PDF <embed> every 2s and log anything we find ===
+              setInterval(function() {
+                try {
+                  var e = document.querySelector('embed, iframe');
+                  if (!e) return;
+                  send({
+                    __diag: true,
+                    source: 'dom-scan',
+                    tag: e.tagName,
+                    type: e.getAttribute && e.getAttribute('type'),
+                    src: (e.src || '').slice(0, 120),
+                    currentPage: e.currentPage,
+                    pageCount: e.pageCount,
+                    hash: window.location && window.location.hash
+                  });
+                } catch (err) { /* ignore */ }
+              }, 2000);
+            })();
+        """.trimIndent()
+        log.debug("Generated viewport capture script: \n{}", jScript)
+        return jScript
     }
 
     /** Reloads the browser content with updated theme colours whenever the IDE theme changes. */
@@ -110,11 +222,14 @@ class TypstFilePreviewer(
                 ApplicationManager.getApplication().invokeLater {
                     val url = currentPdfUrl
                     if (url != null) {
-                        browser?.loadURL(url)
+                        browser?.loadURL(url + viewportFragment())
                     }
                 }
             })
     }
+
+    /** Returns the URL hash fragment to restore the last-known viewport, or empty if none. */
+    private fun viewportFragment(): String = lastViewport?.toUrlFragment() ?: ""
 
     // ---- FileEditor interface ----
 
@@ -124,7 +239,18 @@ class TypstFilePreviewer(
     override fun isModified(): Boolean = false
     override fun isValid(): Boolean = file.isValid
 
-    override fun setState(state: FileEditorState) {}
+    override fun getState(level: FileEditorStateLevel): FileEditorState {
+        if (!TypstSettingsState.getInstance().rememberPreviewScrollAcrossRestart) {
+            return FileEditorState.INSTANCE
+        }
+        val v = lastViewport ?: return FileEditorState.INSTANCE
+        return PdfViewportFileEditorState.from(v)
+    }
+
+    override fun setState(state: FileEditorState) {
+        if (!TypstSettingsState.getInstance().rememberPreviewScrollAcrossRestart) return
+        (state as? PdfViewportFileEditorState)?.toViewport()?.let { lastViewport = it }
+    }
     override fun addPropertyChangeListener(listener: PropertyChangeListener) {}
     override fun removePropertyChangeListener(listener: PropertyChangeListener) {}
     override fun getFile(): VirtualFile = file
@@ -297,16 +423,17 @@ class TypstFilePreviewer(
 
         val fileUrl = outputPdf.toURI().toString()
         ApplicationManager.getApplication().invokeLater {
-            if (!project.isDisposed) {
-                if (currentPdfUrl == fileUrl) {
-                    // Same file — just force Chromium to re-read from disk
-                    browser.cefBrowser.reloadIgnoreCache()
-                } else {
-                    // First load or different file
-                    currentPdfUrl = fileUrl
-                    browser.loadURL(fileUrl)
-                }
-            }
+            if (project.isDisposed) return@invokeLater
+
+            // Cache-bust via query param so Chromium re-fetches the PDF from disk.
+            // Fragment (#page=…) is preserved by the viewer separately.
+            val cacheBust = "?v=${System.currentTimeMillis()}"
+            val fragment = viewportFragment()
+            val urlToLoad = fileUrl + cacheBust + fragment
+
+            currentPdfUrl = fileUrl
+            log.info("[viewport] reloading PDF — lastViewport=$lastViewport — url=$urlToLoad")
+            browser.loadURL(urlToLoad)
         }
     }
 
