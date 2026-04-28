@@ -6,7 +6,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.util.io.HttpRequests
@@ -36,7 +35,13 @@ class TinymistDownloadService {
             return
         }
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Downloading Tinymist language server", true) {
+        // Use Task.Backgroundable.queue() rather than ProgressManager.getInstance().run(task).
+        // The latter, when called off the EDT (e.g. inside an LSP-framework read action),
+        // synchronously invokeAndWait()s onto the EDT to set up the indicator UI, which
+        // IntelliJ's deadlock detector rightly refuses (read-action + invokeAndWait is a
+        // classic deadlock pattern). queue() schedules asynchronously and is thread-safe
+        // from any caller context.
+        object : Task.Backgroundable(project, "Downloading Tinymist language server", true) {
             override fun run(indicator: ProgressIndicator) {
                 isDownloading = true
                 try {
@@ -100,7 +105,7 @@ class TinymistDownloadService {
                     isDownloading = false
                 }
             }
-        })
+        }.queue()
     }
 
     fun resolveLatestDownloadUrl(baseUrl: String, assetName: String): String? {
