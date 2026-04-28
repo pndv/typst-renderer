@@ -16,18 +16,16 @@ import java.nio.file.Files
 /**
  * Unit tests for host-platform helpers in [TinymistManager.Companion].
  *
- * Covers Batch 1 of the test-coverage plan (D.39–45):
- *  - well-known install directory enumeration for Windows and Unix
+ *  - Well-known install directory enumeration for Windows and Unix
  *  - isBinaryExecutable checks for Unix (canExecute) and Windows (extension fallback)
  *
  * Host-sensitive tests use JUnit 4's [assumeTrue] to skip (rather than silently no-op)
- * when the required OS branch isn't exercised by the current host. `addWindowsDirs`
+ * when the current host doesn't exercise the required OS branch. `addWindowsDirs`
  * is testable on any host because it only builds path strings; `addUnixDirs` branches
  * on `isMacOS()` / `isLinux()` so the macOS- and linux-specific assertions are gated.
  */
 class TinymistManagerTest {
 
-    // ---- D.39  addWindowsDirs includes cargo/scoop/winget/chocolatey/ProgramFiles/.local/bin ----
 
     @Test
     fun addWindowsDirs_includesCargoScoopWingetChocolateyProgramFilesLocalBin() {
@@ -43,7 +41,6 @@ class TinymistManagerTest {
         // WinGet / ProgramFiles / LocalAppData entries only appear when envs are set — don't assert.
     }
 
-    // ---- D.40  addUnixDirs on macOS includes cargo + homebrew + /usr/local/bin ----
 
     @Test
     fun addUnixDirs_macOS_includesCargoHomebrewUsrLocal() {
@@ -57,7 +54,6 @@ class TinymistManagerTest {
         assertTrue(dirs.contains("/usr/bin"))
     }
 
-    // ---- D.41  addUnixDirs on Linux includes cargo + linuxbrew + nix + .local/bin ----
 
     @Test
     fun addUnixDirs_linux_includesCargoLinuxbrewNixLocalBin() {
@@ -73,8 +69,6 @@ class TinymistManagerTest {
         assertTrue(dirs.any { it.endsWith(".local/bin") })
     }
 
-    // ---- D.42  isBinaryExecutable on Windows accepts .exe extension ----
-
     @Test
     fun isBinaryExecutable_windowsWithExeExtension_returnsTrue() {
         assumeTrue("Windows-only", isWindows())
@@ -86,7 +80,6 @@ class TinymistManagerTest {
         }
     }
 
-    // ---- D.43  isBinaryExecutable on Windows accepts canExecute fallback ----
 
     @Test
     fun isBinaryExecutable_windowsWithCanExecuteFlag_returnsTrue() {
@@ -100,7 +93,6 @@ class TinymistManagerTest {
         }
     }
 
-    // ---- D.44  isBinaryExecutable on Unix with canExecute returns true ----
 
     @Test
     fun isBinaryExecutable_unixWithCanExecute_returnsTrue() {
@@ -114,8 +106,6 @@ class TinymistManagerTest {
         }
     }
 
-    // ---- D.45  isBinaryExecutable on Unix without canExecute returns false ----
-
     @Test
     fun isBinaryExecutable_unixWithoutCanExecute_returnsFalse() {
         assumeTrue("Unix-only", !isWindows())
@@ -127,8 +117,6 @@ class TinymistManagerTest {
             tmp.delete()
         }
     }
-
-    // ---- Boundary cases for isBinaryExecutable ----
 
     @Test
     fun isBinaryExecutable_nonexistentFile_returnsFalse() {

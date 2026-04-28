@@ -11,3 +11,4 @@ build
 !src/main/resources/pdfjs/build/**
 .certs
 /.run/
+/out/

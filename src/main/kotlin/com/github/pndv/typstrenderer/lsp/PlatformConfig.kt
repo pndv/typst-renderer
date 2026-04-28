@@ -1,7 +1,9 @@
 package com.github.pndv.typstrenderer.lsp
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.pndv.typstrenderer.lsp.PlatformConfig.tinymistBaseUrl
 import com.intellij.openapi.diagnostic.logger
+import org.jetbrains.annotations.VisibleForTesting
 
 private val LOG = logger<PlatformConfig>()
 
@@ -64,11 +66,23 @@ object PlatformConfig {
     private val configs: Map<String, ToolConfig> by lazy { load() }
 
     val tinymist: ToolConfig
-        get() = configs["tinymist"]
-            ?: error("platforms.json missing 'tinymist' section")
+        get() = configs["tinymist"] ?: error("platforms.json missing 'tinymist' section")
     val typst: ToolConfig
-        get() = configs["typst"]
-            ?: error("platforms.json missing 'typst' section")
+        get() = configs["typst"] ?: error("platforms.json missing 'typst' section")
+
+    /**
+     * Test-only override for the tinymist download base URL. When non-null,
+     * [tinymistBaseUrl] returns this instead of `tinymist.baseUrl`. Lets tests
+     * point [TinymistDownloadService.downloadInBackground] at a [okhttp3.mockwebserver.MockWebServer]
+     * so they don't hit the real GitHub releases endpoint. Reset to null in tearDown.
+     */
+    @get:VisibleForTesting
+    @set:VisibleForTesting
+    internal var tinymistBaseUrlOverride: String? = null
+
+    /** The tinymist download base URL, with a test-only override layered on top. */
+    val tinymistBaseUrl: String
+        get() = tinymistBaseUrlOverride ?: tinymist.baseUrl
 
     /**
      * Platforms on which BOTH tools are available. This is the authoritative
@@ -81,23 +95,22 @@ object PlatformConfig {
     fun isSupported(key: PlatformKey): Boolean = key in supported
 
     private fun load(): Map<String, ToolConfig> {
-        val stream = PlatformConfig::class.java.getResourceAsStream("/platforms.json")
+        val stream =
+            PlatformConfig::class.java.getResourceAsStream("/platforms.json")
             ?: error("platforms.json not found on classpath")
         val raw: Map<String, Any> = stream.use {
-            @Suppress("UNCHECKED_CAST")
-            ObjectMapper().readValue(it, Map::class.java) as Map<String, Any>
+            val typeReference = object : com.fasterxml.jackson.core.type.TypeReference<Map<String, Any>>() {}
+            ObjectMapper().readValue(it, typeReference)
         }
         return raw.mapValues { (tool, value) -> parseToolConfig(tool, value) }
     }
 
     @Suppress("UNCHECKED_CAST")
     private fun parseToolConfig(tool: String, value: Any): ToolConfig {
-        val node = value as? Map<String, Any>
-            ?: error("platforms.json: '$tool' is not an object")
-        val baseUrl = node["baseUrl"] as? String
-            ?: error("platforms.json: '$tool' missing 'baseUrl'")
-        val platforms = node["platforms"] as? List<Map<String, Any?>>
-            ?: error("platforms.json: '$tool' missing 'platforms' array")
+        val node = value as? Map<String, Any> ?: error("platforms.json: '$tool' is not an object")
+        val baseUrl = node["baseUrl"] as? String ?: error("platforms.json: '$tool' missing 'baseUrl'")
+        val platforms =
+            node["platforms"] as? List<Map<String, Any?>> ?: error("platforms.json: '$tool' missing 'platforms' array")
 
         val map = LinkedHashMap<PlatformKey, PlatformEntry>()
         for (p in platforms) {

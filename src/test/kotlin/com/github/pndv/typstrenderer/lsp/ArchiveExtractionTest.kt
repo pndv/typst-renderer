@@ -15,13 +15,12 @@ import java.util.zip.ZipOutputStream
 /**
  * Tests for archive extraction in [TypstDownloadService].
  *
- * Covers Batch 2 of the test-coverage plan:
- *  - D.62  Unix tar.xz: extracts `typst` binary from the archive
- *  - D.63  Windows zip: finds `typst.exe` in a zip and extracts it
- *  - D.64  tar non-zero exit → IOException
- *  - D.65  zip missing typst.exe → IOException
- *  - D.66  tempExtractDir cleaned up on success (tar.xz path)
- *  - D.67  tempExtractDir cleaned up on failure (tar.xz path)
+ *  - Unix tar.xz: extracts `typst` binary from the archive
+ *  - Windows zip: finds `typst.exe` in a zip and extracts it
+ *  - tar non-zero exit → IOException
+ *  - zip missing typst.exe → IOException
+ *  - tempExtractDir cleaned up on success (tar.xz path)
+ *  - tempExtractDir cleaned up on failure (tar.xz path)
  *
  * Archive fixtures are generated on the fly in the workspace tempdir so tests don't
  * depend on binary files checked into the repo. The tar.xz tests invoke the host's
@@ -76,8 +75,6 @@ class ArchiveExtractionTest {
         }
     }
 
-    // ---- D.62  tar.xz extraction (Unix-only, uses host tar) ----
-
     @Test
     fun extractFromTarXz_validArchive_extractsTypstBinary() {
         assumeTrue("Unix-only — uses `tar` command", !isWindows())
@@ -91,8 +88,6 @@ class ArchiveExtractionTest {
         assertTrue("target binary should exist at ${target.absolutePath}", target.exists())
         assertTrue(target.readText().contains("fake typst"))
     }
-
-    // ---- D.63  zip extraction (cross-platform) ----
 
     @Test
     fun extractFromZip_validArchive_extractsTypstExe() {
@@ -111,8 +106,6 @@ class ArchiveExtractionTest {
         assertTrue(target.exists())
         assertEquals("FAKE_EXE_BYTES", target.readText())
     }
-
-    // ---- D.64  tar non-zero exit → IOException ----
 
     @Test
     fun extractFromTarXz_corruptArchive_throwsIoException() {
@@ -134,8 +127,6 @@ class ArchiveExtractionTest {
         }
     }
 
-    // ---- Extra: tar.xz with no `typst` file inside → IOException ----
-
     @Test
     fun extractFromTarXz_archiveMissingTypstBinary_throwsIoException() {
         assumeTrue("Unix-only", !isWindows())
@@ -155,8 +146,6 @@ class ArchiveExtractionTest {
         }
     }
 
-    // ---- D.65  zip missing typst.exe → IOException ----
-
     @Test
     fun extractFromZip_archiveMissingTypstExe_throwsIoException() {
         val archive = File(workDir, "no-exe.zip")
@@ -172,8 +161,6 @@ class ArchiveExtractionTest {
             )
         }
     }
-
-    // ---- D.66  tempExtractDir cleaned up on success ----
 
     @Test
     fun extractFromTarXz_cleansUpTempExtractDirOnSuccess() {
@@ -191,8 +178,6 @@ class ArchiveExtractionTest {
             tempExtractDir.exists(),
         )
     }
-
-    // ---- D.67  tempExtractDir cleaned up on failure ----
 
     @Test
     fun extractFromTarXz_cleansUpTempExtractDirOnFailure() {
@@ -215,8 +200,6 @@ class ArchiveExtractionTest {
             tempExtractDir.exists(),
         )
     }
-
-    // ---- extractTypstBinary dispatcher ----
 
     @Test
     fun extractTypstBinary_onUnix_dispatchesToTarXz() {

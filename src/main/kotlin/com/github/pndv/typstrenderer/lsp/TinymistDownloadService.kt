@@ -56,8 +56,11 @@ class TinymistDownloadService {
                         return
                     }
 
-                    // Resolve the latest release download URL
-                    val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.tinymist.baseUrl, assetName)
+                    // Resolve the latest release download URL.
+                    // PlatformConfig.tinymistBaseUrl resolves to the real GitHub releases
+                    // URL in production and to a test-only override (e.g. a MockWebServer)
+                    // when one has been set — keeps tests offline and hermetic.
+                    val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.tinymistBaseUrl, assetName)
                     if (downloadUrl == null) {
                         notifyError(project, "Could not find tinymist release for this platform ($assetName)")
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
