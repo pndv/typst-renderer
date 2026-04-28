@@ -5,5 +5,9 @@
 .kotlin
 .qodana
 build
+# Un-ignore the vendored PDF.js `build/` subfolder (viewer runtime assets),
+# which the broad `build` rule above would otherwise swallow.
+!src/main/resources/pdfjs/build/
+!src/main/resources/pdfjs/build/**
 .certs
 /.run/

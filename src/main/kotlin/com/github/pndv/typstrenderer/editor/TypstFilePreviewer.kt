@@ -33,6 +33,8 @@ import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.io.BaseOutputReader
+import org.cef.CefSettings
+import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
 import java.beans.PropertyChangeListener
 import java.io.File
@@ -55,10 +57,8 @@ class TypstFilePreviewer(
 
     private val log = logger<TypstFilePreviewer>()
 
-    private var currentPdfUrl: String? = null
     private val jcefSupported = JBCefApp.isSupported()
 
-    //    private val browser: JCEFHtmlPanel? = if (jcefSupported) JCEFHtmlPanel(currentPdfUrl) else null
     private val browser: JBCefBrowser? = if (jcefSupported) JBCefBrowser() else null
     private val fallbackLabel = JBLabel("JCEF is not supported — PDF preview is unavailable.", SwingConstants.CENTER)
 
@@ -69,12 +69,27 @@ class TypstFilePreviewer(
 
     private val isDark get() = EditorColorsManager.getInstance().isDarkEditor
 
-    /** Last viewport reported by Chromium's PDF viewer via postMessage. Reapplied on every reload. */
+    /**
+     * Last viewport reported by the in-page PDF.js bridge (see `pdfjs-bridge.js`).
+     * Mirrored to [FileEditorState] when the "remember across restart" setting is on,
+     * and pushed back to JS before each reload so the document re-opens at the same spot.
+     */
     @Volatile
     private var lastViewport: PdfViewportState? = null
 
-    /** JS→Kotlin bridge: JS calls this with `{"page":N,"yOffset":D}` each time the viewport changes. */
-    private val viewportQuery: JBCefJSQuery? = browser?.let { JBCefJSQuery.create(it as com.intellij.ui.jcef.JBCefBrowserBase) }
+    /** JS → Kotlin bridge used by `pdfjs-bridge.js` to report viewport changes. */
+    private val viewportQuery: JBCefJSQuery? =
+        browser?.let { JBCefJSQuery.create(it as com.intellij.ui.jcef.JBCefBrowserBase) }
+
+    /** Loaded lazily once — the bridge JS with the JSQuery-inject snippet substituted in. */
+    private val bridgeJs: String by lazy { loadBridgeJs() }
+
+    /** True once the PDF.js viewer page has finished its first load. Subsequent reloads hot-swap via JS. */
+    @Volatile
+    private var viewerLoaded: Boolean = false
+
+    /** Stable per-previewer ID used in HTTP URLs to route /pdf/<id> and /bridge/<id> requests. */
+    private val previewerId: String = java.util.UUID.randomUUID().toString()
 
     init {
         // Output PDF goes next to the source file in a temp dir to avoid polluting the project
@@ -85,20 +100,9 @@ class TypstFilePreviewer(
 
         if (jcefSupported) {
             browser?.let { Disposer.register(this, it) }
-            viewportQuery?.let { q ->
-                Disposer.register(this, q)
-                q.addHandler { json ->
-                    log.info("[viewport] payload from JS: $json")
-                    val parsed = PdfViewportState.fromJson(json)
-                    if (parsed != null) {
-                        lastViewport = parsed
-                        log.info("[viewport] lastViewport updated -> page=${parsed.page}, yOffset=${parsed.yOffset}")
-                    } else {
-                        log.info("[viewport] payload did NOT parse as viewport state — treating as diagnostic only")
-                    }
-                    null
-                }
-            }
+            viewportQuery?.let { Disposer.register(this, it) }
+            installViewportBridge()
+            installRequestHandler()
             installLoadEndHandlers()
             listenForThemeChanges()
             startWatching()
@@ -106,12 +110,48 @@ class TypstFilePreviewer(
         }
     }
 
+    /** Wires the JS-side viewport reports into [lastViewport]. */
+    private fun installViewportBridge() {
+        viewportQuery?.addHandler { json ->
+            PdfViewportState.fromJson(json)?.let { lastViewport = it }
+            null
+        }
+    }
+
     /**
-     * Installs the `onLoadEnd` handler that runs every time a page finishes loading in the browser.
-     * Two jobs:
-     *  1. Inject `color-scheme: dark` so Chromium's built-in PDF viewer picks up dark mode.
-     *  2. Install a `message` listener that captures viewport updates from the PDF viewer
-     *     (page + vertical scroll) and reports them to Kotlin via [viewportQuery].
+     * Registers this previewer with [PdfjsPreviewerRegistry] so the built-in HTTP
+     * server can resolve `/pdf/<id>` and `/bridge/<id>` requests to this editor's
+     * compiled PDF and bridge JS. Unregistered in [dispose].
+     *
+     * We use IntelliJ's Built-In Netty server (the same one used by the platform
+     * Markdown plugin and the third-party intellij-pdf-viewer) instead of a
+     * `CefSchemeHandlerFactory` or per-browser `CefRequestHandler`. In remote
+     * JCEF (the default in 2024.3+ IDEs) sub-resource fetches bypass per-browser
+     * handlers; serving over real HTTP works in both in-process and remote modes.
+     */
+    private fun installRequestHandler() {
+        PdfjsPreviewerRegistry.register(
+            PdfjsPreviewerRegistration(
+                id = previewerId,
+                currentPdf = { if (outputPdf.isFile && outputPdf.length() > 0) outputPdf else null },
+                bridgeJs = { bridgeJs },
+            )
+        )
+    }
+
+    /** Reads `pdfjs-bridge.js` from the classpath and substitutes the JSQuery-inject placeholder. */
+    private fun loadBridgeJs(): String {
+        val raw = javaClass.getResourceAsStream("/pdfjs-bridge.js")?.use { it.readBytes().toString(Charsets.UTF_8) }
+            ?: return ""
+        val injected = viewportQuery?.inject("payload") ?: ""
+        return raw.replace("/*__REPORT_CALL__*/", "$injected;")
+    }
+
+    /**
+     * Installs the `onLoadEnd` handler. It has two jobs:
+     *  1. Apply dark colour-scheme so the PDF.js viewer blends into dark themes.
+     *  2. Inject the bridge JS after the viewer page finishes loading, and mark the
+     *     viewer as loaded so subsequent reloads can hot-swap via `__typstOpenPdf`.
      */
     private fun installLoadEndHandlers() {
         log.debug("Installing onLoadEnd handlers")
@@ -122,96 +162,75 @@ class TypstFilePreviewer(
                 frame: org.cef.browser.CefFrame,
                 httpStatusCode: Int
             ) {
+                val url = frame.url.orEmpty()
+                log.info("[pdfjs] onLoadEnd status=$httpStatusCode url=$url isMain=${frame.isMain}")
                 if (isDark) {
                     b.executeJavaScript(
                         "document.documentElement.style.colorScheme='dark';",
-                        b.url, 0
+                        url, 0
                     )
                 }
-                viewportQuery?.let { q ->
-                    b.executeJavaScript(buildViewportCaptureScript(q), b.url, 0)
+                if (frame.isMain && url.startsWith(PdfjsEndpoints.viewerUrl())) {
+                    b.executeJavaScript(bridgeJs, url, 0)
+                    // If a viewport was persisted from a previous session, push it to
+                    // the bridge so `pagesloaded` restores it.
+                    lastViewport?.let { pushPendingRestore(it) }
+                    viewerLoaded = true
                 }
+            }
+
+            // Surfaces network-level failures (DNS, refused, aborted, blocked, etc.)
+            // that don't show up as a 404 from our HttpRequestHandler. Without this,
+            // a request that never reaches our server (e.g. blocked by JCEF policy)
+            // is invisible in idea.log.
+            override fun onLoadError(
+                b: org.cef.browser.CefBrowser?,
+                frame: org.cef.browser.CefFrame?,
+                errorCode: org.cef.handler.CefLoadHandler.ErrorCode?,
+                errorText: String?,
+                failedUrl: String?
+            ) {
+                log.warn("[pdfjs] onLoadError code=$errorCode text=$errorText url=$failedUrl isMain=${frame?.isMain}")
+            }
+        }, cefBrowser)
+
+        // Forwards in-page console.log/info/warn/error to idea.log. JCEF doesn't
+        // surface JS console output anywhere by default — without this hook the
+        // page can be silently throwing exceptions and we'd have no idea.
+        browser.jbCefClient.addDisplayHandler(object : CefDisplayHandlerAdapter() {
+            override fun onConsoleMessage(
+                b: org.cef.browser.CefBrowser?,
+                level: CefSettings.LogSeverity?,
+                message: String?,
+                source: String?,
+                line: Int
+            ): Boolean {
+                val tag = when (level) {
+                    CefSettings.LogSeverity.LOGSEVERITY_ERROR,
+                    CefSettings.LogSeverity.LOGSEVERITY_FATAL -> "ERROR"
+                    CefSettings.LogSeverity.LOGSEVERITY_WARNING -> "WARN"
+                    else -> "INFO"
+                }
+                val src = source?.substringAfterLast('/') ?: "?"
+                when (tag) {
+                    "ERROR" -> log.warn("[js:$tag] $src:$line $message")
+                    "WARN" -> log.info("[js:$tag] $src:$line $message")
+                    else -> log.info("[js] $src:$line $message")
+                }
+                return false
             }
         }, cefBrowser)
     }
 
-    /**
-     * Builds the JS that listens for Chromium PDF viewer viewport messages and forwards them
-     * to Kotlin. Throttled to ~150ms so rapid scrolls don't flood the bridge.
-     *
-     * Chromium's built-in PDF viewer posts messages of the form
-     * `{type: 'viewport', pageNumber: N, ...}` to its host window on scroll/page changes.
-     * Event shape may vary by Chromium version; the narrow `type === 'viewport'` guard
-     * keeps this safe — worst case we miss updates and the fragment is omitted.
-     */
-    private fun buildViewportCaptureScript(q: JBCefJSQuery): String {
-        // `q.inject('payload')` produces the JS snippet that invokes the Kotlin handler.
-        val reportCall = q.inject("payload")
-        val jScript = """
-            (function() {
-              if (window.__typstViewportHooked) return;
-              window.__typstViewportHooked = true;
-              var lastSent = 0;
-              var pending = null;
-              function send(obj) {
-                var payload = JSON.stringify(obj);
-                $reportCall
-              }
-              function flushViewport() {
-                if (!pending) return;
-                var obj = pending;
-                pending = null;
-                lastSent = Date.now();
-                send(obj);
-              }
-              // === DIAGNOSTIC: log every postMessage event so we can see the real schema ===
-              window.addEventListener('message', function(e) {
-                try {
-                  var d = e && e.data;
-                  var diag = {
-                    __diag: true,
-                    dataType: typeof d,
-                    type: (d && d.type) || null,
-                    keys: (d && typeof d === 'object') ? Object.keys(d).slice(0, 20) : [],
-                    preview: (typeof d === 'string') ? d.slice(0, 200) : null
-                  };
-                  send(diag);
-                } catch (err) { /* ignore */ }
-
-                // === Real capture: only act on viewport-typed messages ===
-                var d2 = e && e.data;
-                if (!d2 || d2.type !== 'viewport') return;
-                var page = d2.pageNumber;
-                if (typeof page !== 'number') return;
-                var y = (d2.viewportHeight && d2.pageY) ? d2.pageY
-                      : (typeof d2.verticalScroll === 'number') ? d2.verticalScroll
-                      : 0;
-                pending = { page: page, yOffset: y };
-                var now = Date.now();
-                if (now - lastSent >= 150) flushViewport();
-                else setTimeout(flushViewport, 150 - (now - lastSent));
-              });
-              // === DIAGNOSTIC: also scan DOM for a PDF <embed> every 2s and log anything we find ===
-              setInterval(function() {
-                try {
-                  var e = document.querySelector('embed, iframe');
-                  if (!e) return;
-                  send({
-                    __diag: true,
-                    source: 'dom-scan',
-                    tag: e.tagName,
-                    type: e.getAttribute && e.getAttribute('type'),
-                    src: (e.src || '').slice(0, 120),
-                    currentPage: e.currentPage,
-                    pageCount: e.pageCount,
-                    hash: window.location && window.location.hash
-                  });
-                } catch (err) { /* ignore */ }
-              }, 2000);
-            })();
-        """.trimIndent()
-        log.debug("Generated viewport capture script: \n{}", jScript)
-        return jScript
+    /** Sends a viewport restore target to the in-page bridge. No-op if the viewer isn't loaded yet. */
+    private fun pushPendingRestore(v: PdfViewportState) {
+        val cef = browser?.cefBrowser ?: return
+        val json = """{"page":${v.page},"yOffset":${v.yOffset}}"""
+        val escaped = json.replace("\\", "\\\\").replace("'", "\\'")
+        cef.executeJavaScript(
+            "window.__typstSetPendingRestore && window.__typstSetPendingRestore('$escaped');",
+            cef.url, 0
+        )
     }
 
     /** Reloads the browser content with updated theme colours whenever the IDE theme changes. */
@@ -220,16 +239,16 @@ class TypstFilePreviewer(
             .connect(this)
             .subscribe(TypstThemeService.TOPIC, TypstThemeListener { _ ->
                 ApplicationManager.getApplication().invokeLater {
-                    val url = currentPdfUrl
-                    if (url != null) {
-                        browser?.loadURL(url + viewportFragment())
-                    }
+                    val cef = browser?.cefBrowser ?: return@invokeLater
+                    // Theme changes only tweak CSS in-page — no reload, so scroll is preserved.
+                    val colorScheme = if (isDark) "dark" else "light"
+                    cef.executeJavaScript(
+                        "document.documentElement.style.colorScheme='$colorScheme';",
+                        cef.url, 0
+                    )
                 }
             })
     }
-
-    /** Returns the URL hash fragment to restore the last-known viewport, or empty if none. */
-    private fun viewportFragment(): String = lastViewport?.toUrlFragment() ?: ""
 
     // ---- FileEditor interface ----
 
@@ -256,6 +275,7 @@ class TypstFilePreviewer(
     override fun getFile(): VirtualFile = file
 
     override fun dispose() {
+        PdfjsPreviewerRegistry.unregister(previewerId)
         reloadJob?.cancel(false)
         reloadExecutor.shutdownNow()
         stopWatching()
@@ -421,19 +441,25 @@ class TypstFilePreviewer(
         if (!jcefSupported || browser == null) return
         if (!outputPdf.exists() || outputPdf.length() == 0L) return
 
-        val fileUrl = outputPdf.toURI().toString()
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
 
-            // Cache-bust via query param so Chromium re-fetches the PDF from disk.
-            // Fragment (#page=…) is preserved by the viewer separately.
-            val cacheBust = "?v=${System.currentTimeMillis()}"
-            val fragment = viewportFragment()
-            val urlToLoad = fileUrl + cacheBust + fragment
+            // Cache-bust via query param so the browser re-fetches the PDF on each compile.
+            val pdfUrl = PdfjsEndpoints.pdfUrl(previewerId, System.currentTimeMillis())
 
-            currentPdfUrl = fileUrl
-            log.info("[viewport] reloading PDF — lastViewport=$lastViewport — url=$urlToLoad")
-            browser.loadURL(urlToLoad)
+            if (viewerLoaded) {
+                // Hot-swap: ask PDF.js to load the new PDF in-place. The bridge snapshots
+                // the current viewport as "pendingRestore" before swapping, so scroll is preserved.
+                val cef = browser.cefBrowser
+                cef.executeJavaScript("window.__typstOpenPdf && window.__typstOpenPdf('$pdfUrl');", cef.url, 0)
+                log.debug("[viewport] hot-swap PDF via bridge — url=$pdfUrl")
+            } else {
+                // First load: navigate to the PDF.js viewer with the compiled PDF as its ?file= arg.
+                val encoded = java.net.URLEncoder.encode(pdfUrl, Charsets.UTF_8)
+                val viewerUrl = "${PdfjsEndpoints.viewerUrl()}?file=$encoded"
+                log.info("[viewport] loading PDF.js viewer — url=$viewerUrl")
+                browser.loadURL(viewerUrl)
+            }
         }
     }
 

@@ -63,6 +63,11 @@
         <!-- Notifications -->
         <notificationGroup id="Typst" displayType="BALLOON" bundle="messages.TypstBundle"
                            key="notification.group.typst"/>
+
+        <!-- HTTP server for PDF.js viewer assets (served to the embedded JCEF browser
+             via IntelliJ's built-in Netty server, namespaced under /typst-renderer-*). -->
+        <httpRequestHandler
+                implementation="com.github.pndv.typstrenderer.editor.PdfjsPreviewServer"/>
     </extensions>
 
     <actions resource-bundle="messages.TypstBundle">
