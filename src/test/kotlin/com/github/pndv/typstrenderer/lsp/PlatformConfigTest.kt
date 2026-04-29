@@ -7,21 +7,19 @@ import java.net.URI
 /**
  * Unit tests for [PlatformConfig], [PlatformKey], and [ToolConfig].
  *
- * Covers Batch 1 of the test-coverage plan:
- *  - D.27  isSupported for every intersection platform returns true
- *  - D.28  isSupported for unsupported platforms returns false
- *  - D.29  per-tool assetFor still resolves on tool-specific platforms
- *  - D.30–33  OS/arch normalization
- *  - D.34–38  platforms.json schema smoke tests
- *  - D.52  URL construction from baseUrl + asset
- *  - D.53  unsupported-platform error enumerates supported platforms
+ *  - DisSupported for every intersection platform returns true
+ *  - DisSupported for unsupported platforms returns false
+ *  - Dper-tool assetFor still resolves on tool-specific platforms
+ *  - OS/arch normalisation
+ *  - platforms.json schema smoke tests
+ *  - URL construction from baseUrl + asset
+ *  - Unsupported-platform error enumerates supported platforms
  *
  * Plain JUnit 4 — no IntelliJ fixture required. `BasePlatformTestCase`-backed tests
  * remain JUnit 3-style in other files since that base class requires it.
  */
 class PlatformConfigTest {
 
-    // ---- D.27  isSupported for every intersection platform returns true ----
 
     @Test
     fun isSupported_forEveryIntersectionPlatform_returnsTrue() {
@@ -32,7 +30,6 @@ class PlatformConfigTest {
         }
     }
 
-    // ---- D.28  isSupported for unsupported platforms returns false ----
 
     @Test
     fun isSupported_forUnsupportedPlatform_returnsFalse() {
@@ -48,7 +45,6 @@ class PlatformConfigTest {
         }
     }
 
-    // ---- D.29  per-tool assetFor still resolves on tool-specific platforms ----
 
     @Test
     fun assetFor_perToolStillResolvesOnToolSpecificPlatforms() {
@@ -66,7 +62,6 @@ class PlatformConfigTest {
         assertFalse(PlatformConfig.isSupported(winArm))
     }
 
-    // ---- D.30–33  OS/arch normalization ----
 
     @Test
     fun osArchNormalization_macFromSystemProperty_producesDarwin() {
@@ -158,8 +153,7 @@ class PlatformConfigTest {
     @Test
     fun platformsJsonSchema_intersectionIsNonEmpty() {
         assertFalse(
-            "Intersection of tinymist and typst platforms must be non-empty — " +
-                    "if someone drops a platform from one tool and the overlap vanishes, catch it here.",
+            "Intersection of tinymist and typst platforms must be non-empty — " + "if someone drops a platform from one tool and the overlap vanishes, catch it here.",
             PlatformConfig.supported.isEmpty(),
         )
     }
@@ -177,7 +171,6 @@ class PlatformConfigTest {
         }
     }
 
-    // ---- D.52  URL construction from baseUrl + asset ----
 
     @Test
     fun downloadUrl_isBaseUrlSlashAsset_forEveryEntry() {
@@ -191,7 +184,6 @@ class PlatformConfigTest {
         }
     }
 
-    // ---- D.53  unsupported-platform error enumerates supported platforms ----
 
     @Test
     fun unsupportedPlatformError_listsAllSupportedPlatformsFromConfig() {

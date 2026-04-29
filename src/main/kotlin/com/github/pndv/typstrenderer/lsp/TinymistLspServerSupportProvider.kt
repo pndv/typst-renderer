@@ -3,6 +3,7 @@ package com.github.pndv.typstrenderer.lsp
 import com.github.pndv.typstrenderer.language.TypstFileType
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -17,6 +18,8 @@ class TinymistLspServerSupportProvider : LspServerSupportProvider {
         file: VirtualFile,
         serverStarter: LspServerSupportProvider.LspServerStarter
     ) {
+        if (ApplicationManager.getApplication().isUnitTestMode) return
+
         if (file.fileType != TypstFileType) return
 
         val manager = TinymistManager.getInstance()
