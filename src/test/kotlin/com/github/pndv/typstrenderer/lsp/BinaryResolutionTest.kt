@@ -13,7 +13,7 @@ import java.nio.file.Files
 /**
  * Tests for the 3-stage binary resolution fallback in [TinymistManager].
  *
- * Covers D.46–51. The production [TinymistManager.resolveTinymistPath] and
+ * The production [TinymistManager.resolveTinymistPath] and
  * [TinymistManager.resolveTypstPath] are thin wrappers over [resolveBinaryPath];
  * testing the pure helper gives us stage-by-stage priority coverage without
  * needing a `BasePlatformTestCase` fixture.
@@ -43,8 +43,6 @@ class BinaryResolutionTest {
         }
     }
 
-    // ---- D.46  User-configured path wins ----
-
     @Test
     fun resolveBinary_userConfiguredPathValid_returnsConfiguredPath() {
         val configured = executableFile("configured-binary")
@@ -62,8 +60,6 @@ class BinaryResolutionTest {
             configured.absolutePath, result,
         )
     }
-
-    // ---- D.47  Invalid user path falls through to stage 2 ----
 
     @Test
     fun resolveBinary_userConfiguredPathBlank_fallsThroughToPathLookup() {
@@ -94,8 +90,6 @@ class BinaryResolutionTest {
         )
     }
 
-    // ---- D.48/49  Stage 2 returns PATH-or-well-known hit ----
-
     @Test
     fun resolveBinary_foundOnSystemPathOrWellKnownDir_returnsThatPath() {
         val pathHit = executableFile("somewhere-on-path").absolutePath
@@ -109,8 +103,6 @@ class BinaryResolutionTest {
         assertEquals(pathHit, result)
     }
 
-    // ---- D.50  Stage 3 returns downloaded binary ----
-
     @Test
     fun resolveBinary_foundAsDownloadedBinary_returnsDownloadedPath() {
         val downloaded = executableFile("downloaded-binary")
@@ -123,8 +115,6 @@ class BinaryResolutionTest {
 
         assertEquals(downloaded.absolutePath, result)
     }
-
-    // ---- D.51  Nothing anywhere → null ----
 
     @Test
     fun resolveBinary_notFoundAnywhere_returnsNull() {

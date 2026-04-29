@@ -1,7 +1,9 @@
 package com.github.pndv.typstrenderer.lsp
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.intellij.openapi.diagnostic.logger
+import org.jetbrains.annotations.VisibleForTesting
 
 private val LOG = logger<PlatformConfig>()
 
@@ -64,11 +66,23 @@ object PlatformConfig {
     private val configs: Map<String, ToolConfig> by lazy { load() }
 
     val tinymist: ToolConfig
-        get() = configs["tinymist"]
-            ?: error("platforms.json missing 'tinymist' section")
+        get() = configs["tinymist"] ?: error("platforms.json missing 'tinymist' section")
     val typst: ToolConfig
-        get() = configs["typst"]
-            ?: error("platforms.json missing 'typst' section")
+        get() = configs["typst"] ?: error("platforms.json missing 'typst' section")
+
+    /**
+     * Test-only override for the tinymist download base URL. When non-null,
+     * [tinymistBaseUrl] returns this instead of `tinymist.baseUrl`. Lets tests
+     * point [TinymistDownloadService.downloadInBackground] at a [okhttp3.mockwebserver.MockWebServer]
+     * so they don't hit the real GitHub releases endpoint. Reset to null in tearDown.
+     */
+    @get:VisibleForTesting
+    @set:VisibleForTesting
+    internal var tinymistBaseUrlOverride: String? = null
+
+    /** The tinymist download base URL, with a test-only override layered on top. */
+    val tinymistBaseUrl: String
+        get() = tinymistBaseUrlOverride ?: tinymist.baseUrl
 
     /**
      * Platforms on which BOTH tools are available. This is the authoritative
@@ -80,37 +94,43 @@ object PlatformConfig {
 
     fun isSupported(key: PlatformKey): Boolean = key in supported
 
+    /**
+     * 1-to-1 DTOs for the `platforms.json` schema. Kept separate from [ToolConfig] /
+     * [PlatformEntry] because the JSON ships `platforms` as an array of `{os, arch, ...}`
+     * objects, while the public [ToolConfig] exposes them as a `Map<PlatformKey, …>`
+     * for fast lookup.
+     */
+    private data class PlatformEntryDto(
+        val os: String,
+        val arch: String,
+        val asset: String,
+        val archive: String? = null,
+    )
+
+    private data class ToolConfigDto(
+        val baseUrl: String,
+        val platforms: List<PlatformEntryDto>,
+    ) {
+        fun toToolConfig(): ToolConfig {
+            val map = LinkedHashMap<PlatformKey, PlatformEntry>()
+            for (entry in platforms) {
+                val key = PlatformKey(entry.os, entry.arch)
+                if (map.put(key, PlatformEntry(entry.asset, entry.archive)) != null) {
+                    LOG.warn("platforms.json: duplicate entry for $key — later entry wins")
+                }
+            }
+            return ToolConfig(baseUrl, map)
+        }
+    }
+
     private fun load(): Map<String, ToolConfig> {
         val stream = PlatformConfig::class.java.getResourceAsStream("/platforms.json")
             ?: error("platforms.json not found on classpath")
-        val raw: Map<String, Any> = stream.use {
-            @Suppress("UNCHECKED_CAST")
-            ObjectMapper().readValue(it, Map::class.java) as Map<String, Any>
+        val typeRef = object : TypeReference<Map<String, ToolConfigDto>>() {}
+        val raw: Map<String, ToolConfigDto> = stream.use {
+            jacksonObjectMapper().readValue(it, typeRef)
         }
-        return raw.mapValues { (tool, value) -> parseToolConfig(tool, value) }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun parseToolConfig(tool: String, value: Any): ToolConfig {
-        val node = value as? Map<String, Any>
-            ?: error("platforms.json: '$tool' is not an object")
-        val baseUrl = node["baseUrl"] as? String
-            ?: error("platforms.json: '$tool' missing 'baseUrl'")
-        val platforms = node["platforms"] as? List<Map<String, Any?>>
-            ?: error("platforms.json: '$tool' missing 'platforms' array")
-
-        val map = LinkedHashMap<PlatformKey, PlatformEntry>()
-        for (p in platforms) {
-            val os = p["os"] as? String ?: error("platforms.json: '$tool' entry missing 'os'")
-            val arch = p["arch"] as? String ?: error("platforms.json: '$tool' entry missing 'arch'")
-            val asset = p["asset"] as? String ?: error("platforms.json: '$tool' entry missing 'asset'")
-            val archive = p["archive"] as? String
-            val key = PlatformKey(os, arch)
-            if (map.put(key, PlatformEntry(asset, archive)) != null) {
-                LOG.warn("platforms.json: duplicate entry for '$tool' $key — later entry wins")
-            }
-        }
-        return ToolConfig(baseUrl, map)
+        return raw.mapValues { (_, dto) -> dto.toToolConfig() }
     }
 
     /**
