@@ -35,7 +35,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     private val handler = TypstLspRenameHandler()
 
-    // ---- isAvailableOnDataContext ----
 
     fun testIsAvailable_whenFileIsNotTypst_returnsFalse() {
         val psiFile = myFixture.configureByText("test.txt", "not a typst file")
@@ -51,7 +50,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
     // IntelliJ platform's LSP bridge auto-registers a server for the Tinymist provider when
     // a .typ file is opened in the test fixture, making findLspServer() return non-null.
     // That branch is better covered by a Batch 3 integration test with a controllable LSP mock.
-
     fun testIsAvailable_whenNoVirtualFileInContext_returnsFalse() {
         val ctx = SimpleDataContext.builder()
             .add(CommonDataKeys.PROJECT, project)
@@ -68,8 +66,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
         assertFalse(handler.isAvailableOnDataContext(ctx))
     }
-
-    // ---- offsetToLspPosition ----
 
     fun testOffsetToLspPosition_atLineStart_returnsZeroCharacter() {
         val doc = DocumentImpl("line1\nline2\nline3")
@@ -99,7 +95,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
     }
 
     // ---- extractCurrentName ----
-
     fun testExtractCurrentName_fromPrepareRenameResult_returnsPlaceholder() {
         val result = PrepareRenameResult(Range(Position(0, 0), Position(0, 3)), "foo")
         val doc = DocumentImpl("anything")
@@ -127,7 +122,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
     }
 
     // ---- getWordAtCaret ----
-
     fun testGetWordAtCaret_onIdentifier_returnsIdentifier() {
         myFixture.configureByText("test.typ", "#let gre<caret>eting = 1")
         assertEquals("greeting", handler.getWordAtCaret(myFixture.editor))
@@ -149,7 +143,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
     }
 
     // ---- findVirtualFile ----
-
     fun testFindVirtualFile_malformedUri_returnsNull() {
         assertNull(handler.findVirtualFile("not a uri at all %%%"))
     }
@@ -159,7 +152,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
     }
 
     // ---- applyTextEdits (reverse-order offset preservation) ----
-
     fun testApplyTextEdits_reverseOrderApplication_preservesOffsets() {
         // `applyTextEdits` resolves URIs via LocalFileSystem, so we need a real on-disk file
         // (the default `temp://` VFS used by myFixture.configureByText won't resolve).
@@ -200,7 +192,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         }
     }
 
-    // ---- performRenameWithServer (A.4–A.12) ----
 
     override fun tearDown() {
         TestDialogManager.setTestDialog(null)
@@ -208,7 +199,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         super.tearDown()
     }
 
-    // A.4 — single-file WorkspaceEdit via `changes` map applies correctly
     fun testRename_singleFileEdit_appliesChanges() {
         val tempFile = Files.createTempFile("typst-rename-test", ".typ")
         try {
@@ -242,7 +232,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         }
     }
 
-    // A.5 — multi-file WorkspaceEdit via `documentChanges` applies to both files
     fun testRename_multiFileViaDocumentChanges_appliesAllEdits() {
         val file1 = Files.createTempFile("typst-rename-a", ".typ")
         val file2 = Files.createTempFile("typst-rename-b", ".typ")
@@ -295,7 +284,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         }
     }
 
-    // A.7 — user cancels the input dialog → no rename request sent, document unchanged
     fun testRename_userCancelsDialog_noChangesApplied() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
         val fakeServer = FakeLspServer(
@@ -311,7 +299,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
-    // A.8 — prepareRename returns null (server can't rename here) → info shown, no changes
     fun testRename_prepareRenameReturnsNull_showsInfoNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
         val fakeServer = FakeLspServer(null)
@@ -323,7 +310,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
-    // A.9 — rename request throws (e.g. timeout) → error dialog shown, no changes
     fun testRename_renameRequestThrows_showsErrorNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
         val fakeServer = FakeLspServer(
@@ -341,7 +327,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
-    // A.10 — rename returns null workspace edit → info shown, no changes
     fun testRename_renameReturnsNullWorkspaceEdit_showsInfoNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
         val fakeServer = FakeLspServer(
@@ -359,7 +344,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
-    // A.11 — documentChanges containing resource operations (file rename/create) are silently skipped
     fun testRename_workspaceEditWithResourceOperations_skipsUnsupportedOps() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
         val workspaceEdit = WorkspaceEdit()
@@ -378,7 +362,6 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
     }
 
-    // A.12 — entering the same name as current → treated as cancel, no rename sent
     fun testRename_sameNameEntered_treatedAsCancel() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
         val fakeServer = FakeLspServer(
