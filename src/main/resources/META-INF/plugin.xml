@@ -1,15 +1,92 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.pndv.typstrenderer</id>
-    <name>typst-renderer</name>
+    <name>Typst</name>
     <vendor>pndv</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lsp</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.TypstBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.pndv.typstrenderer.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.pndv.typstrenderer.startup.MyProjectActivity" />
+        <!-- Typst file type -->
+        <fileType
+                name="Typst"
+                implementationClass="com.github.pndv.typstrenderer.language.TypstFileType"
+                fieldName="INSTANCE"
+                language="Typst"
+                extensions="typ"/>
+
+        <!-- Minimal parser definition (binds .typ files to TypstLanguage at the PSI level) -->
+        <lang.parserDefinition language="Typst"
+                               implementationClass="com.github.pndv.typstrenderer.language.TypstParserDefinition"/>
+
+        <!-- Syntax highlighter (provides token boundaries for LSP semantic-token overlay) -->
+        <lang.syntaxHighlighterFactory language="Typst"
+                                       implementationClass="com.github.pndv.typstrenderer.language.TypstSyntaxHighlighterFactory"/>
+
+        <!-- Comment toggling (Ctrl+/ and Ctrl+Shift+/) -->
+        <lang.commenter language="Typst"
+                        implementationClass="com.github.pndv.typstrenderer.language.TypstCommenter"/>
+
+        <!-- LSP support via tinymist -->
+        <platform.lsp.serverSupportProvider
+                implementation="com.github.pndv.typstrenderer.lsp.TinymistLspServerSupportProvider"/>
+
+        <!-- Rename via LSP (IntelliJ's LSP module does not support textDocument/rename) -->
+        <renameHandler implementation="com.github.pndv.typstrenderer.lsp.TypstLspRenameHandler"
+                       id="TypstLspRenameHandler" order="first"/>
+
+
+        <!-- Settings -->
+        <applicationService
+                serviceImplementation="com.github.pndv.typstrenderer.settings.TypstSettingsState"/>
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
+                id="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
+                bundle="messages.TypstBundle" key="settings.displayName" />
+
+
+        <!-- Tool window for compilation output -->
+        <toolWindow
+                id="Typst Output"
+                anchor="bottom"
+                factoryClass="com.github.pndv.typstrenderer.toolWindow.TypstOutputToolWindowFactory"
+                icon="AllIcons.Toolwindows.ToolWindowMessages"/>
+
+        <!-- Split editor with live PDF preview -->
+        <fileEditorProvider
+                implementation="com.github.pndv.typstrenderer.editor.TypstSplitEditorProvider"/>
+
+        <!-- Notifications -->
+        <notificationGroup id="Typst" displayType="BALLOON" bundle="messages.TypstBundle"
+                           key="notification.group.typst"/>
+
+        <!-- HTTP server for PDF.js viewer assets (served to the embedded JCEF browser
+             via IntelliJ's built-in Netty server, namespaced under /typst-renderer-*). -->
+        <httpRequestHandler
+                implementation="com.github.pndv.typstrenderer.editor.PdfjsPreviewServer"/>
     </extensions>
+
+    <actions resource-bundle="messages.TypstBundle">
+        <action id="Typst.Compile"
+                class="com.github.pndv.typstrenderer.actions.TypstCompileAction"
+                text="%compile.action.text"
+                description="%compile.action.description"
+                icon="AllIcons.Actions.Execute">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift T"/>
+        </action>
+
+        <action id="Typst.Watch"
+                class="com.github.pndv.typstrenderer.actions.TypstWatchAction"
+                text="%watch.action.text"
+                description="%watch.action.description"
+                icon="AllIcons.Actions.Restart">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

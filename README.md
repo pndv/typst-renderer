@@ -1,28 +1,26 @@
 # typst-renderer
 
 ![Build](https://github.com/pndv/typst-renderer/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-
-## Template ToDo list
-- [x] Create a new [IntelliJ Platform Plugin Template][template] project.
-- [ ] Get familiar with the [template documentation][template].
-- [ ] Adjust the [pluginGroup](./gradle.properties) and [pluginName](./gradle.properties), as well as the [id](./src/main/resources/META-INF/plugin.xml) and [sources package](./src/main/kotlin).
-- [ ] Adjust the plugin description in `README` (see [Tips][docs:plugin-description])
-- [ ] Review the [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html?from=IJPluginTemplate).
-- [ ] [Publish a plugin manually](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate) for the first time.
-- [ ] Set the `MARKETPLACE_ID` in the above README badges. You can obtain it once the plugin is published to JetBrains Marketplace.
-- [ ] Set the [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html?from=IJPluginTemplate) related [secrets](https://github.com/JetBrains/intellij-platform-plugin-template#environment-variables).
-- [ ] Set the [Deployment Token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html?from=IJPluginTemplate).
-- [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
-- [ ] Configure the [CODECOV_TOKEN](https://docs.codecov.com/docs/quick-start) secret for automated test coverage reports on PRs
+[![Version](https://img.shields.io/jetbrains/plugin/v/31308.svg)](https://plugins.jetbrains.com/plugin/31308-typst-renderer)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/31308.svg)](https://plugins.jetbrains.com/plugin/31308-typst-renderer)
 
 <!-- Plugin description -->
-This Fancy IntelliJ Platform Plugin is going to be your implementation of the brilliant ideas that you have.
+**Typst** support for IntelliJ-based IDEs — edit, preview, and compile [Typst](https://typst.app) documents without leaving your IDE.
 
-This specific section is a source for the [plugin.xml](/src/main/resources/META-INF/plugin.xml) file which will be extracted by the [Gradle](/build.gradle.kts) during the build process.
+## Features
 
-To keep everything working, do not remove `<!-- ... -->` sections. 
+- **Syntax highlighting** and **comment toggling** (<kbd>Ctrl+/</kbd> / <kbd>Ctrl+Shift+/</kbd>) for `.typ` files
+- **Full LSP integration** via [tinymist](https://github.com/Myriad-Dreamin/tinymist):
+  - Code completion, real-time diagnostics, hover documentation, go-to-definition, formatting, and rename refactoring
+- **Live PDF preview** — a split editor shows the compiled PDF alongside your source, auto-refreshing on every save
+- **Compile action** (<kbd>Ctrl+Shift+T</kbd>) for single-shot compilation, and a **Watch mode** toggle for continuous background compilation
+- **Auto-download** of `tinymist` and `typst` CLI binaries from GitHub if they are not already installed
+- **Settings page** under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> to configure custom binary paths
+- **Typst Output** tool window for viewing compilation logs
+
+## Requirements
+
+No manual installation of external tools is required — the plugin will automatically download `tinymist` and `typst` on first use. If you already have them installed (via Cargo, Homebrew, Scoop, etc.), they will be detected automatically.
 <!-- Plugin description end -->
 
 ## Installation
@@ -34,9 +32,11 @@ To keep everything working, do not remove `<!-- ... -->` sections.
 
 - Using JetBrains Marketplace:
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/31308-typst-renderer) and install it by clicking
+  the <kbd>Install to ...</kbd> button in case your IDE is running.
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from JetBrains Marketplace and install it manually using
+  You can also download the [latest release](https://plugins.jetbrains.com/plugin/31308-typst-renderer/versions) from
+  JetBrains Marketplace and install it manually using
   <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
 
 - Manually:

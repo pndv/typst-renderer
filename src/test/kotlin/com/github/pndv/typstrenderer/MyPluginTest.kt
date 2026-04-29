@@ -1,39 +1,50 @@
 package com.github.pndv.typstrenderer
 
-import com.intellij.ide.highlighter.XmlFileType
-import com.intellij.openapi.components.service
-import com.intellij.psi.xml.XmlFile
-import com.intellij.testFramework.TestDataPath
+import com.github.pndv.typstrenderer.language.TypstFile
+import com.github.pndv.typstrenderer.language.TypstFileType
+import com.github.pndv.typstrenderer.language.TypstLanguage
+import com.intellij.lang.LanguageCommenters
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import com.intellij.util.PsiErrorElementUtil
-import com.github.pndv.typstrenderer.services.MyProjectService
 
-@TestDataPath("\$CONTENT_ROOT/src/test/testData")
 class MyPluginTest : BasePlatformTestCase() {
 
-    fun testXMLFile() {
-        val psiFile = myFixture.configureByText(XmlFileType.INSTANCE, "<foo>bar</foo>")
-        val xmlFile = assertInstanceOf(psiFile, XmlFile::class.java)
-
-        assertFalse(PsiErrorElementUtil.hasErrors(project, xmlFile.virtualFile))
-
-        assertNotNull(xmlFile.rootTag)
-
-        xmlFile.rootTag?.let {
-            assertEquals("foo", it.name)
-            assertEquals("bar", it.value.text)
-        }
+    fun testTypstFileTypeRegistered() {
+        val file = myFixture.configureByText("test.typ", "#let foo = 1")
+        assertEquals(TypstFileType, file.virtualFile.fileType)
     }
 
-    fun testRename() {
-        myFixture.testRename("foo.xml", "foo_after.xml", "a2")
+    fun testTypstLanguageInstance() {
+        assertNotNull(TypstLanguage.INSTANCE)
+        assertEquals("Typst", TypstLanguage.INSTANCE.id)
     }
 
-    fun testProjectService() {
-        val projectService = project.service<MyProjectService>()
-
-        assertNotSame(projectService.getRandomNumber(), projectService.getRandomNumber())
+    fun testTypstFileTypeProperties() {
+        assertEquals("Typst", TypstFileType.name)
+        assertEquals("typ", TypstFileType.defaultExtension)
+        assertNotNull(TypstFileType.icon)
     }
 
-    override fun getTestDataPath() = "src/test/testData/rename"
+    fun testTypstCommenter() {
+        val commenter = LanguageCommenters.INSTANCE.forLanguage(TypstLanguage.INSTANCE)
+        assertNotNull(commenter)
+        assertEquals("//", commenter!!.lineCommentPrefix)
+        assertEquals("/*", commenter.blockCommentPrefix)
+        assertEquals("*/", commenter.blockCommentSuffix)
+    }
+
+    fun testTypstPsiFileLanguage() {
+        val psiFile = myFixture.configureByText("test.typ", "#let foo = 1")
+        // With the ParserDefinition, the PsiFile should be a TypstFile backed by TypstLanguage
+        assertInstanceOf(psiFile, TypstFile::class.java)
+        assertEquals(TypstLanguage.INSTANCE, psiFile.language)
+    }
+
+    fun testTypstCommenterViaFile() {
+        // Verify that commenter is found when looking up by the PsiFile's language
+        // (this is the real code path used by Ctrl+/ — not the direct LanguageCommenters lookup)
+        val psiFile = myFixture.configureByText("test.typ", "#let foo = 1")
+        val commenter = LanguageCommenters.INSTANCE.forLanguage(psiFile.language)
+        assertNotNull("Commenter should be found via PsiFile's language", commenter)
+        assertEquals("//", commenter!!.lineCommentPrefix)
+    }
 }
