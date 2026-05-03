@@ -35,10 +35,10 @@ class TypstWatchAction : AnAction() {
         val watchService = project.service<TypstWatchService>()
         if (watchService.isWatching) {
             e.presentation.isEnabledAndVisible = true
-            e.presentation.text = TypstBundle.message("watch.action.text.stop")
+            e.presentation.text = TypstBundle.message("action.Typst.Watch.text.stop")
         } else {
             e.presentation.isEnabledAndVisible = file?.fileType == TypstFileType
-            e.presentation.text = TypstBundle.message("watch.action.text")
+            e.presentation.text = TypstBundle.message("action.Typst.Watch.text")
         }
     }
 

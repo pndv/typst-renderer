@@ -1,5 +1,7 @@
 package com.github.pndv.typstrenderer.lsp
 
+import com.github.pndv.typstrenderer.TYPST_NOTIFICATION_GROUP_ID
+import com.github.pndv.typstrenderer.TypstBundle
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -41,12 +43,12 @@ class TinymistDownloadService {
         // IntelliJ's deadlock detector rightly refuses (read-action + invokeAndWait is a
         // classic deadlock pattern). queue() schedules asynchronously and is thread-safe
         // from any caller context.
-        object : Task.Backgroundable(project, "Downloading Tinymist language server", true) {
+        object : Task.Backgroundable(project, TypstBundle.message("download.tinymist.task.title"), true) {
             override fun run(indicator: ProgressIndicator) {
                 isDownloading = true
                 try {
                     indicator.isIndeterminate = false
-                    indicator.text = "Resolving latest tinymist release..."
+                    indicator.text = TypstBundle.message("download.tinymist.resolving")
                     indicator.fraction = 0.0
 
                     val assetName = TinymistManager.getPlatformAssetName()
@@ -62,12 +64,12 @@ class TinymistDownloadService {
                     // when one has been set — keeps tests offline and hermetic.
                     val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.tinymistBaseUrl, assetName)
                     if (downloadUrl == null) {
-                        notifyError(project, "Could not find tinymist release for this platform ($assetName)")
+                        notifyError(project, TypstBundle.message("download.tinymist.notFound", assetName))
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
 
-                    indicator.text = "Downloading tinymist..."
+                    indicator.text = TypstBundle.message("download.tinymist.downloading")
                     indicator.fraction = 0.1
 
                     val manager = TinymistManager.getInstance()
@@ -82,15 +84,15 @@ class TinymistDownloadService {
                     }
 
                     indicator.fraction = 1.0
-                    indicator.text = "Tinymist downloaded successfully"
+                    indicator.text = TypstBundle.message("download.tinymist.success")
 
                     LOG.info("Tinymist downloaded to: ${targetFile.absolutePath}")
 
                     NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Typst")
+                        .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
                         .createNotification(
-                            "Tinymist downloaded",
-                            "Tinymist language server has been downloaded and is ready to use.",
+                            TypstBundle.message("notification.tinymist.downloaded.title"),
+                            TypstBundle.message("notification.tinymist.downloaded.body"),
                             NotificationType.INFORMATION
                         ).notify(project)
 
@@ -101,7 +103,7 @@ class TinymistDownloadService {
                         LOG.info("Tinymist download cancelled by user")
                     } else {
                         LOG.warn("Failed to download tinymist", e)
-                        notifyError(project, "Download failed: ${e.message}")
+                        notifyError(project, TypstBundle.message("download.tinymist.failed", e.message ?: ""))
                     }
                     onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                 } finally {
@@ -149,9 +151,9 @@ class TinymistDownloadService {
 
     private fun notifyError(project: Project?, message: String) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("Typst")
+            .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
             .createNotification(
-                "Tinymist download failed",
+                TypstBundle.message("notification.tinymist.download.failed.title"),
                 message,
                 NotificationType.ERROR
             ).notify(project)

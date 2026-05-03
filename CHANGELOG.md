@@ -4,6 +4,35 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-01
+
+### Fixed
+* Action menu showed literal `%compile.action.text` placeholder instead of the resolved bundle string. 
+  - Switched to the IntelliJ Platform's automatic key-derivation convention (`action.<id>.text` keys + plugin-level `<resource-bundle>`, no `text=` attribute on actions).
+* Manual compile (<kbd>Ctrl+Shift+T</kbd>) and watch toggle now pass `--root <project root>` to typst, matching the auto-watch path. 
+  - Fixes "cannot read file outside project root" errors when a `.typ` imports across directories (e.g. `#import "../../template.typ"`).
+* PDF preview now refreshes correctly after the user fixes a compilation error. 
+  - Previously the preview pane stayed stuck on the error HTML; the cause was `viewerLoaded` not being reset when `loadHTML(errorHtml(...))` replaced the PDF.js viewer page.
+* `<br>` tags in preview-pane error messages now render as line breaks instead of literal `&lt;br&gt;` text. The `errorHtml()` helper no longer over-escapes its input; user-supplied substitutions are escaped at the call site via `StringUtil.escapeXmlEntities()`.
+
+### Changed
+* Centralised user-visible strings into `TypstBundle` for localisation:
+  - Replaced hardcoded messages in `TypstFilePreviewer`, `TypstDownloadService`, `TypstCompileService`, and related classes.
+  - Added ~40 new keys to `TypstBundle.properties` covering notifications, download progress text, previewer HTML, and console output.
+* Replaced magic strings with named constants: `TYPST_OUTPUT_TOOL_WINDOW_ID` and `TYPST_NOTIFICATION_GROUP_ID` in a new `Constants.kt`.
+* Reorganised action definitions:
+  - Adopted the IntelliJ Platform `action.<id>.text` / `action.<id>.description` auto-derivation convention.
+  - Removed `text=` / `description=` / `resource-bundle=` attributes from `<actions>` block in `plugin.xml`.
+* Simplified `TypstParserDefinition` — replaced anonymous inner class with a lambda for creating `PsiParser`.
+* Streamlined Gradle `downloadPdfJs` task:
+  - Cleaner temporary-file handling.
+  - Tightened code comments.
+
+### Tests
+* Added `TypstBundleTest`:
+  - Validates that every bundle key referenced from Kotlin resolves at runtime.
+  - Verifies action registration in the IntelliJ ActionManager.
+
 ## [0.1.0] - 2026-04-28
 
 ### Added
@@ -63,6 +92,8 @@
 - "Typst Output" tool window for viewing compilation output
 
 [Unreleased]: https://github.com/pndv/typst-renderer/compare/0.1.0...HEAD
+
+[0.1.1]: https://github.com/pndv/typst-renderer/compare/0.1.0...0.1.1
 
 [0.1.0]: https://github.com/pndv/typst-renderer/compare/0.0.1...0.1.0
 

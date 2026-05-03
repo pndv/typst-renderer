@@ -1,5 +1,7 @@
 package com.github.pndv.typstrenderer.compile
 
+import com.github.pndv.typstrenderer.TYPST_OUTPUT_TOOL_WINDOW_ID
+import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
 import com.intellij.execution.configurations.GeneralCommandLine
@@ -14,6 +16,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.wm.ToolWindowManager
+import java.nio.file.Path
 
 @Service(Service.Level.PROJECT)
 class TypstWatchService(private val project: Project) : Disposable {
@@ -37,9 +40,16 @@ class TypstWatchService(private val project: Project) : Disposable {
             return
         }
 
-        val commandLine = GeneralCommandLine(typstBinary, "watch", inputPath).apply {
+        val commandLine = GeneralCommandLine(
+            buildList {
+                add(typstBinary)
+                add("watch")
+                project.basePath?.let { add("--root"); add(it) }
+                add(inputPath)
+            }
+        ).apply {
             withCharset(Charsets.UTF_8)
-            project.basePath?.let { withWorkDirectory(it) }
+            project.basePath?.let { withWorkingDirectory(Path.of(it)) }
         }
 
         val handler = OSProcessHandler(commandLine)
@@ -55,20 +65,23 @@ class TypstWatchService(private val project: Project) : Disposable {
 
             override fun processTerminated(event: ProcessEvent) {
                 getConsoleView()?.print(
-                    "\nWatch process terminated with exit code ${event.exitCode}\n",
+                    TypstBundle.message("console.watch.terminated", event.exitCode),
                     ConsoleViewContentType.SYSTEM_OUTPUT
                 )
             }
         })
 
         getConsoleView()?.clear()
-        getConsoleView()?.print("Watching $inputPath for changes...\n", ConsoleViewContentType.SYSTEM_OUTPUT)
+        getConsoleView()?.print(
+            TypstBundle.message("console.watch.starting", inputPath),
+            ConsoleViewContentType.SYSTEM_OUTPUT
+        )
 
         handler.startNotify()
         processHandler = handler
         watchedFile = inputPath
 
-        ToolWindowManager.getInstance(project).getToolWindow("Typst Output")?.show()
+        ToolWindowManager.getInstance(project).getToolWindow(TYPST_OUTPUT_TOOL_WINDOW_ID)?.show()
     }
 
     fun stopWatch() {
@@ -82,7 +95,7 @@ class TypstWatchService(private val project: Project) : Disposable {
     }
 
     private fun getConsoleView(): ConsoleView? {
-        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Typst Output") ?: return null
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TYPST_OUTPUT_TOOL_WINDOW_ID) ?: return null
         val content = toolWindow.contentManager.getContent(0) ?: return null
         return content.component as? ConsoleView
     }

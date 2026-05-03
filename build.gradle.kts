@@ -182,54 +182,53 @@ tasks {
         val marker = pdfjsOutDir.file(".version").asFile
         val outDirFile = pdfjsOutDir.asFile
         val tempZipFile = layout.buildDirectory.file("pdfjs/pdfjs-$pdfjsVersion.zip").get().asFile
-        val version = pdfjsVersion
         outputs.file(marker)
         doLast {
-            if (marker.exists() && marker.readText().trim() == version) {
-                logger.lifecycle("PDF.js $version already vendored.")
+            if (marker.exists() && marker.readText().trim() == pdfjsVersion) {
+                logger.lifecycle("PDF.js $pdfjsVersion already vendored.")
                 return@doLast
             }
             val zipUrl =
-                "https://github.com/mozilla/pdf.js/releases/download/v$version/pdfjs-$version-dist.zip"
-            val tempZip = tempZipFile
-            tempZip.parentFile.mkdirs()
+                "https://github.com/mozilla/pdf.js/releases/download/v$pdfjsVersion/pdfjs-$pdfjsVersion-dist.zip"
+            tempZipFile.parentFile.mkdirs()
             logger.lifecycle("Downloading $zipUrl")
             val stream: InputStream = URI(zipUrl).toURL().openStream()
             stream.use { input ->
-                tempZip.outputStream().use { out -> input.copyTo(out) }
+                tempZipFile.outputStream().use { out -> input.copyTo(out) }
             }
-            val outDir = outDirFile
-            outDir.deleteRecursively()
-            outDir.mkdirs()
+            outDirFile.deleteRecursively()
+            outDirFile.mkdirs()
             val keepExt = setOf(
                 "html", "css", "mjs", "js", "map", "json", "wasm",
                 "png", "svg", "gif", "properties", "ftl", "bcmap", "pfb", "icc"
             )
-            val zip: ZipFile = ZipFile(tempZip)
-            try {
+            val zip = ZipFile(tempZipFile)
+            zip.use { zip ->
                 val entries: List<ZipEntry> = zip.entries().toList()
                 for (e in entries) {
                     if (e.isDirectory) continue
                     if (!(e.name.startsWith("web/") || e.name.startsWith("build/"))) continue
+
                     // Ship all PDF.js locales (~1 MB) so the viewer's UI chrome
                     // (toolbar tooltips, page/zoom labels) matches the user's IDE
                     // language. Without this, non-English IDE users see an English
                     // PDF preview toolbar inside an otherwise localized IDE, and any
                     // locale not bundled here would 404 and break PDF.js rendering.
                     val ext = e.name.substringAfterLast('.', "")
+
                     if (ext.isNotEmpty() && ext !in keepExt) continue
-                    val dest = File(outDir, e.name)
+
+                    val dest = File(outDirFile, e.name)
                     dest.parentFile.mkdirs()
+
                     val entryStream: InputStream = zip.getInputStream(e)
                     entryStream.use { input ->
                         dest.outputStream().use { out -> input.copyTo(out) }
                     }
                 }
-            } finally {
-                zip.close()
             }
-            marker.writeText(version)
-            logger.lifecycle("PDF.js vendored to ${outDir.absolutePath}")
+            marker.writeText(pdfjsVersion)
+            logger.lifecycle("PDF.js vendored to ${outDirFile.absolutePath}")
         }
     }
 }

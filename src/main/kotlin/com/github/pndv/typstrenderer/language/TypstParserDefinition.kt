@@ -2,7 +2,6 @@ package com.github.pndv.typstrenderer.language
 
 import com.intellij.lang.ASTNode
 import com.intellij.lang.ParserDefinition
-import com.intellij.lang.PsiBuilder
 import com.intellij.lang.PsiParser
 import com.intellij.lexer.Lexer
 import com.intellij.openapi.project.Project
@@ -10,7 +9,6 @@ import com.intellij.psi.FileViewProvider
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.impl.source.tree.LeafPsiElement
-import com.intellij.psi.tree.IElementType
 import com.intellij.psi.tree.IFileElementType
 import com.intellij.psi.tree.TokenSet
 
@@ -27,15 +25,13 @@ class TypstParserDefinition : ParserDefinition {
 
     override fun createLexer(project: Project): Lexer = TypstLexer()
 
-    override fun createParser(project: Project): PsiParser = object : PsiParser {
-        override fun parse(root: IElementType, builder: PsiBuilder): ASTNode {
-            val rootMarker = builder.mark()
-            while (!builder.eof()) {
-                builder.advanceLexer()
-            }
-            rootMarker.done(root)
-            return builder.treeBuilt
+    override fun createParser(project: Project): PsiParser = PsiParser { root, builder ->
+        val rootMarker = builder.mark()
+        while (!builder.eof()) {
+            builder.advanceLexer()
         }
+        rootMarker.done(root)
+        builder.treeBuilt
     }
 
     override fun getFileNodeType(): IFileElementType = FILE

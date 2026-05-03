@@ -10,10 +10,11 @@ import com.intellij.platform.lsp.api.customization.LspFormattingSupport
 import com.intellij.platform.lsp.api.customization.LspSemanticTokensSupport
 import com.intellij.psi.PsiFile
 
+import java.nio.file.Path
+
 class TinymistLspServerDescriptor(
     project: Project, private val tinymistPath: String
 ) : ProjectWideLspServerDescriptor(project, "Tinymist") {
-
 
     /**
      * Customizes LSP feature support for the Tinymist language server.
@@ -47,7 +48,7 @@ class TinymistLspServerDescriptor(
     override fun createCommandLine(): GeneralCommandLine {
         return GeneralCommandLine(tinymistPath, "lsp").apply {
             withCharset(Charsets.UTF_8)
-            project.basePath?.let { withWorkDirectory(it) }
+            project.basePath?.let { withWorkingDirectory(Path.of(it)) }
         }
     }
 }

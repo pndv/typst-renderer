@@ -70,11 +70,9 @@
                 implementation="com.github.pndv.typstrenderer.editor.PdfjsPreviewServer"/>
     </extensions>
 
-    <actions resource-bundle="messages.TypstBundle">
+    <actions>
         <action id="Typst.Compile"
                 class="com.github.pndv.typstrenderer.actions.TypstCompileAction"
-                text="%compile.action.text"
-                description="%compile.action.description"
                 icon="AllIcons.Actions.Execute">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
@@ -83,8 +81,6 @@
 
         <action id="Typst.Watch"
                 class="com.github.pndv.typstrenderer.actions.TypstWatchAction"
-                text="%watch.action.text"
-                description="%watch.action.description"
                 icon="AllIcons.Actions.Restart">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>

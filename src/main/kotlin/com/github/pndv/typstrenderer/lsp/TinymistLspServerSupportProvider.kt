@@ -1,5 +1,7 @@
 package com.github.pndv.typstrenderer.lsp
 
+import com.github.pndv.typstrenderer.TYPST_NOTIFICATION_GROUP_ID
+import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.language.TypstFileType
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -41,10 +43,10 @@ class TinymistLspServerSupportProvider : LspServerSupportProvider {
                 } else {
                     LOG.warn("Tinymist download failed; LSP server will not be started")
                     NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Typst")
+                        .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
                         .createNotification(
-                            "Tinymist not found",
-                            "Tinymist language server is not installed. Install it manually or configure the path in Settings > Tools > Typst.",
+                            TypstBundle.message("notification.tinymist.notFound.title"),
+                            TypstBundle.message("notification.tinymist.notFound.body"),
                             NotificationType.WARNING
                         ).notify(project)
                 }

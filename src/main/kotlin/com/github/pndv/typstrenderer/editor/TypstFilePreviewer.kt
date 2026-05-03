@@ -1,5 +1,7 @@
 package com.github.pndv.typstrenderer.editor
 
+import com.github.pndv.typstrenderer.TYPST_OUTPUT_TOOL_WINDOW_ID
+import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
 import com.github.pndv.typstrenderer.settings.TypstSettingsState
@@ -22,6 +24,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.UserDataHolderBase
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
@@ -38,6 +41,7 @@ import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
 import java.beans.PropertyChangeListener
 import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.swing.JComponent
@@ -60,7 +64,7 @@ class TypstFilePreviewer(
     private val jcefSupported = JBCefApp.isSupported()
 
     private val browser: JBCefBrowser? = if (jcefSupported) JBCefBrowser() else null
-    private val fallbackLabel = JBLabel("JCEF is not supported — PDF preview is unavailable.", SwingConstants.CENTER)
+    private val fallbackLabel = JBLabel(TypstBundle.message("previewer.jcef.unsupported"), SwingConstants.CENTER)
 
     private var processHandler: OSProcessHandler? = null
     private val outputPdf: File
@@ -294,7 +298,7 @@ class TypstFilePreviewer(
 
         val typstBinary = TinymistManager.getInstance().resolveTypstPath()
         if (typstBinary == null) {
-            browser?.loadHTML(waitingHtml("Downloading Typst CLI..."))
+            browser?.loadHTML(waitingHtml(TypstBundle.message("previewer.waiting.downloading")))
             TypstDownloadService.getInstance().downloadInBackground(project) { success ->
                 if (project.isDisposed || !file.isValid) return@downloadInBackground
 
@@ -305,12 +309,8 @@ class TypstFilePreviewer(
                         }
                     }
                 } else {
-                    browser?.loadHTML(
-                        errorHtml(
-                            "Typst CLI not found and auto-download failed. " +
-                                    "Install it or configure the path in Settings &gt; Tools &gt; Typst."
-                        )
-                    )
+                    browser?.loadHTML(errorHtml(TypstBundle.message("previewer.error.typstMissing")))
+                    viewerLoaded = false
                 }
             }
             return
@@ -328,7 +328,7 @@ class TypstFilePreviewer(
             }
         ).apply {
             withCharset(Charsets.UTF_8)
-            project.basePath?.let { withWorkDirectory(it) }
+            project.basePath?.let { withWorkingDirectory(Path.of(it)) }
         }
 
         try {
@@ -355,8 +355,9 @@ class TypstFilePreviewer(
                     if (outputType == ProcessOutputTypes.STDERR && text.contains("error", ignoreCase = true)) {
                         ApplicationManager.getApplication().invokeLater {
                             if (!project.isDisposed) {
-                                ToolWindowManager.getInstance(project).getToolWindow("Typst Output")?.show()
-                                browser?.loadHTML(errorHtml("Compilation error — see the Typst Output panel for details."))
+                                ToolWindowManager.getInstance(project).getToolWindow(TYPST_OUTPUT_TOOL_WINDOW_ID)?.show()
+                                browser?.loadHTML(errorHtml(TypstBundle.message("previewer.error.compileFailed")))
+                                viewerLoaded = false
                             }
                         }
                     }
@@ -370,7 +371,7 @@ class TypstFilePreviewer(
 
                 override fun processTerminated(event: ProcessEvent) {
                     getConsoleView()?.print(
-                        "\nPreview process terminated with exit code ${event.exitCode}\n",
+                        TypstBundle.message("console.preview.terminated", event.exitCode),
                         ConsoleViewContentType.SYSTEM_OUTPUT
                     )
                 }
@@ -388,18 +389,22 @@ class TypstFilePreviewer(
             }
         } catch (t: Throwable) {
             log.warn("Failed to start typst watch for ${file.path}", t)
+            // Bundle messages are author-controlled and may contain HTML (e.g. <br>);
+            // exception details are uncontrolled, so escape them BEFORE substitution
+            // into the bundle template so the resulting HTML is safe and the bundle's
+            // intentional tags survive intact.
+            val safeDetails = StringUtil.escapeXmlEntities(t.message ?: t::class.java.name)
             browser?.loadHTML(
                 errorHtml(
-                    "Failed to start Typst preview.<br>" +
-                            "Check that the Typst executable is valid and runnable.<br>" +
-                            "Details: ${t.message ?: t::class.java.name}"
+                    TypstBundle.message("previewer.error.startFailed", safeDetails)
                 )
             )
+            viewerLoaded = false
         }
     }
 
     private fun getConsoleView(): ConsoleView? {
-        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("Typst Output") ?: return null
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TYPST_OUTPUT_TOOL_WINDOW_ID) ?: return null
         val content = toolWindow.contentManager.getContent(0) ?: return null
         return content.component as? ConsoleView
     }
@@ -466,8 +471,8 @@ class TypstFilePreviewer(
     // ---- Utility HTML pages ----
 
     private fun waitingHtml(
-        message: String = "Compiling...",
-        detail: String = "Waiting for typst to generate the PDF."
+        message: String = TypstBundle.message("previewer.waiting.compiling"),
+        detail: String = TypstBundle.message("previewer.waiting.detail")
     ): String {
         val (bg, fg, fgSub) = if (isDark) Triple("#2b2b2b", "#aaaaaa", "#777777")
         else Triple("#f5f5f5", "#555555", "#888888")
@@ -484,6 +489,14 @@ class TypstFilePreviewer(
         """.trimIndent()
     }
 
+    /**
+     * Renders an error page in the preview pane. The [message] is treated as
+     * already-safe HTML — bundle messages can include intentional tags like
+     * `<br>` for line breaks. Callers passing user-supplied content (e.g. an
+     * exception's `message`) are responsible for escaping it via
+     * [StringUtil.escapeXmlEntities] before substituting it into the bundle
+     * template, so the bundle's tags survive while uncontrolled input is safe.
+     */
     private fun errorHtml(message: String): String {
         val (bg, fgSub) = if (isDark) Pair("#2b2b2b", "#aaaaaa")
         else Pair("#f5f5f5", "#666666")
@@ -492,8 +505,8 @@ class TypstFilePreviewer(
             <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;
                          font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#cc4444;background:$bg;">
                 <div style="text-align:center;max-width:500px;padding:20px;">
-                    <p style="font-size:16px;font-weight:bold;">Preview Error</p>
-                    <p style="font-size:13px;color:$fgSub;">${message.replace("<", "&lt;")}</p>
+                    <p style="font-size:16px;font-weight:bold;">${TypstBundle.message("previewer.error.title")}</p>
+                    <p style="font-size:13px;color:$fgSub;">$message</p>
                 </div>
             </body>
             </html>
