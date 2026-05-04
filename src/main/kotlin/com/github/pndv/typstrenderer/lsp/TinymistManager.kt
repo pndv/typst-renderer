@@ -1,6 +1,6 @@
 package com.github.pndv.typstrenderer.lsp
 
-import com.github.pndv.typstrenderer.settings.TypstSettingsState
+import com.github.pndv.typstrenderer.settings.TypstSettings
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.Service
@@ -23,7 +23,7 @@ class TinymistManager {
      * Resolves the tinymist binary path, or null if not available anywhere.
      */
     fun resolveTinymistPath(): String? = resolveBinaryPath(
-        configuredPath = TypstSettingsState.getInstance().tinymistPath,
+        configuredPath = TypstSettings.getInstance().tinymistPath,
         findOnPath = { findBinary("tinymist") },
         downloadedBinary = getDownloadedBinaryPath(),
     )
@@ -32,7 +32,7 @@ class TinymistManager {
      * Resolves the typst CLI binary path, or null if not available.
      */
     fun resolveTypstPath(): String? = resolveBinaryPath(
-        configuredPath = TypstSettingsState.getInstance().typstPath,
+        configuredPath = TypstSettings.getInstance().typstPath,
         findOnPath = { findBinary("typst") },
         downloadedBinary = getDownloadedTypstPath(),
     )

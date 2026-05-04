@@ -13,7 +13,7 @@ import javax.swing.JComponent
 
 class TypstSettingsConfigurable : Configurable {
 
-    private val settings = TypstSettingsState.getInstance()
+    private val settings = TypstSettings.getInstance()
     private var tinymistPath = settings.tinymistPath
     private var typstPath = settings.typstPath
     private var autoCompileOnSave = settings.autoCompileOnSave

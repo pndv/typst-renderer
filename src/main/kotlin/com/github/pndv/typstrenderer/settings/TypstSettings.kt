@@ -1,14 +1,14 @@
 package com.github.pndv.typstrenderer.settings
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
+import com.intellij.openapi.components.service
 
 @Service(Service.Level.APP)
-@State(name = "TypstSettings", storages = [Storage("TypstSettings.xml")])
-class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
+@State(name = "com.github.pndv.typstrenderer.settings.TypstSettings", storages = [Storage("TypstSettings.xml")])
+class TypstSettings : PersistentStateComponent<TypstSettings.State> {
 
     data class State(
         var tinymistPath: String = "",
@@ -42,7 +42,6 @@ class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
     }
 
     companion object {
-        fun getInstance(): TypstSettingsState =
-            ApplicationManager.getApplication().getService(TypstSettingsState::class.java)
+        fun getInstance(): TypstSettings = service()
     }
 }

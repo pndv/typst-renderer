@@ -4,7 +4,7 @@ import com.github.pndv.typstrenderer.TYPST_OUTPUT_TOOL_WINDOW_ID
 import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
-import com.github.pndv.typstrenderer.settings.TypstSettingsState
+import com.github.pndv.typstrenderer.settings.TypstSettings
 import com.github.pndv.typstrenderer.theme.TypstThemeListener
 import com.github.pndv.typstrenderer.theme.TypstThemeService
 import com.intellij.execution.configurations.GeneralCommandLine
@@ -263,7 +263,7 @@ class TypstFilePreviewer(
     override fun isValid(): Boolean = file.isValid
 
     override fun getState(level: FileEditorStateLevel): FileEditorState {
-        if (!TypstSettingsState.getInstance().rememberPreviewScrollAcrossRestart) {
+        if (!TypstSettings.getInstance().rememberPreviewScrollAcrossRestart) {
             return FileEditorState.INSTANCE
         }
         val v = lastViewport ?: return FileEditorState.INSTANCE
@@ -271,7 +271,7 @@ class TypstFilePreviewer(
     }
 
     override fun setState(state: FileEditorState) {
-        if (!TypstSettingsState.getInstance().rememberPreviewScrollAcrossRestart) return
+        if (!TypstSettings.getInstance().rememberPreviewScrollAcrossRestart) return
         (state as? PdfViewportFileEditorState)?.toViewport()?.let { lastViewport = it }
     }
     override fun addPropertyChangeListener(listener: PropertyChangeListener) {}

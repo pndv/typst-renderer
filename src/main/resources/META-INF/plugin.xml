@@ -41,7 +41,7 @@
 
         <!-- Settings -->
         <applicationService
-                serviceImplementation="com.github.pndv.typstrenderer.settings.TypstSettingsState"/>
+                serviceImplementation="com.github.pndv.typstrenderer.settings.TypstSettings"/>
         <applicationConfigurable
                 parentId="tools"
                 instance="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
