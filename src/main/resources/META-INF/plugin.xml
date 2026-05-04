@@ -44,8 +44,8 @@
                 serviceImplementation="com.github.pndv.typstrenderer.settings.TypstSettings"/>
         <applicationConfigurable
                 parentId="tools"
-                instance="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
-                id="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
+                instance="com.github.pndv.typstrenderer.settings.TypstConfigurable"
+                id="com.github.pndv.typstrenderer.settings.TypstConfigurable"
                 bundle="messages.TypstBundle" key="settings.displayName" />
 
 

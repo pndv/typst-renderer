@@ -1,29 +1,33 @@
 package com.github.pndv.typstrenderer.settings
 
+
+import com.intellij.openapi.observable.properties.PropertyGraph
 import com.github.pndv.typstrenderer.lsp.TinymistDownloadService
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
-import com.intellij.openapi.options.Configurable
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
-import javax.swing.JComponent
+import java.awt.BorderLayout
+import javax.swing.JPanel
 
-class TypstSettingsConfigurable : Configurable {
+class TypstSettingsForm : JPanel()  {
+    private val settings
+        get() = TypstSettings.getInstance()
 
-    private val settings = TypstSettings.getInstance()
-    private var tinymistPath = settings.tinymistPath
-    private var typstPath = settings.typstPath
-    private var autoCompileOnSave = settings.autoCompileOnSave
-    private var rememberPreviewScrollAcrossRestart = settings.rememberPreviewScrollAcrossRestart
-    private var tinymistStatusLabel: JBLabel? = null
-    private var typstStatusLabel: JBLabel? = null
+    private val properties = PropertyGraph()
 
-    override fun getDisplayName(): String = "Typst"
+    val tinymistPath = properties.property(settings.tinymistPath)
+    val typstPath = properties.property(settings.typstPath)
+    val autoCompileOnSave = properties.property(settings.autoCompileOnSave)
+    val rememberPreviewScrollAcrossRestart = properties.property(settings.rememberPreviewScrollAcrossRestart)
+    var tinymistStatusLabel: JBLabel? = null
+    var typstStatusLabel: JBLabel? = null
 
-    override fun createComponent(): JComponent = panel {
+    private val generalSettingsGroup = panel {
         group("Language Server (Tinymist)") {
             row("Status:") {
                 tinymistStatusLabel = JBLabel(getTinymistStatusText()).also { cell(it) }
@@ -32,8 +36,7 @@ class TypstSettingsConfigurable : Configurable {
                 textFieldWithBrowseButton(
                     FileChooserDescriptorFactory.singleFile()
                         .withTitle("Select Tinymist Binary")
-                ).bindText(::tinymistPath)
-                    .comment("Path to the tinymist binary. Leave empty for auto-detection.")
+                ).bindText(tinymistPath)
             }
             row {
                 button("Download Tinymist") {
@@ -52,8 +55,7 @@ class TypstSettingsConfigurable : Configurable {
                 textFieldWithBrowseButton(
                     FileChooserDescriptorFactory.singleFile()
                         .withTitle("Select Typst Binary")
-                ).bindText(::typstPath)
-                    .comment("Path to the typst CLI binary. Leave empty for auto-detection.")
+                ).bindText(typstPath).comment("Path to the typst CLI binary. Leave empty for auto-detection.")
             }
             row {
                 button("Download Typst") {
@@ -65,13 +67,13 @@ class TypstSettingsConfigurable : Configurable {
             }
             row {
                 checkBox("Auto-compile on save")
-                    .bindSelected(::autoCompileOnSave)
+                    .bindSelected(autoCompileOnSave)
             }
         }
         group("Preview") {
             row {
                 checkBox("Remember PDF preview scroll position across editor restarts")
-                    .bindSelected(::rememberPreviewScrollAcrossRestart)
+                    .bindSelected(rememberPreviewScrollAcrossRestart)
                     .comment(
                         "When enabled, reopening a .typ file restores the preview to the page and " +
                                 "scroll offset you were viewing. Scroll position is always preserved " +
@@ -81,27 +83,18 @@ class TypstSettingsConfigurable : Configurable {
         }
     }
 
-    override fun isModified(): Boolean =
-        tinymistPath != settings.tinymistPath ||
-                typstPath != settings.typstPath ||
-                autoCompileOnSave != settings.autoCompileOnSave ||
-                rememberPreviewScrollAcrossRestart != settings.rememberPreviewScrollAcrossRestart
-
-    override fun apply() {
-        settings.tinymistPath = tinymistPath
-        settings.typstPath = typstPath
-        settings.autoCompileOnSave = autoCompileOnSave
-        settings.rememberPreviewScrollAcrossRestart = rememberPreviewScrollAcrossRestart
-        // Refresh status labels after applying new paths
-        tinymistStatusLabel?.text = getTinymistStatusText()
-        typstStatusLabel?.text = getTypstStatusText()
+    init {
+        layout = BorderLayout()
+        add(panel {
+            row { cell(generalSettingsGroup).align(AlignX.FILL) }
+        })
     }
 
-    override fun reset() {
-        tinymistPath = settings.tinymistPath
-        typstPath = settings.typstPath
-        autoCompileOnSave = settings.autoCompileOnSave
-        rememberPreviewScrollAcrossRestart = settings.rememberPreviewScrollAcrossRestart
+    fun reset() {
+        tinymistPath.set(settings.tinymistPath)
+        typstPath.set(settings.typstPath)
+        autoCompileOnSave.set(settings.autoCompileOnSave)
+        rememberPreviewScrollAcrossRestart.set(settings.rememberPreviewScrollAcrossRestart)
         tinymistStatusLabel?.text = getTinymistStatusText()
         typstStatusLabel?.text = getTypstStatusText()
     }

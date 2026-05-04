@@ -5,6 +5,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
+import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 
 @Service(Service.Level.APP)
 @State(name = "com.github.pndv.typstrenderer.settings.TypstSettings", storages = [Storage("TypstSettings.xml")])
@@ -37,8 +38,8 @@ class TypstSettings : PersistentStateComponent<TypstSettings.State> {
 
     override fun getState(): State = state
 
-    override fun loadState(state: State) {
-        this.state = state
+    override fun loadState(state: TypstSettings.State) {
+        copyBean(state, this.state)
     }
 
     companion object {
