@@ -17,11 +17,6 @@ jobs:
       actions: read
       contents: read
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'java-kotlin' ]
-
     steps:
 
       - name: Maximize Build Space
@@ -39,13 +34,13 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
+          languages: java-kotlin
           build-mode: manual
 
       - name: Build with Gradle
-        run: ./gradlew --no-daemon compileKotlin compileTestKotlin
+        run: ./gradlew compileKotlin compileTestKotlin
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:java-kotlin"
