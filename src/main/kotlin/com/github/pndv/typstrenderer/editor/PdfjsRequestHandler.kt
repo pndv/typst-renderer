@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Endpoint helpers for the PDF.js viewer served by [PdfjsPreviewServer].
  *
  * We piggyback on IntelliJ's Built-In Netty Server (the same one used for LSP
- * and REST endpoints) instead of registering a JCEF [org.cef.handler.CefSchemeHandlerFactory].
+ * and REST endpoints) instead of registering a JCEF
  * Reasons:
  *  - Works in both in-process and remote JCEF (the latter is the default in
  *    2024.3+ IDEs and bypasses per-browser request handlers for sub-resources).
@@ -166,7 +166,25 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
         resp.send(context.channel(), request)
     }
 
-    private data class Resource(val bytes: ByteArray, val mime: String)
+    private data class Resource(val bytes: ByteArray, val mime: String) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as Resource
+
+            if (!bytes.contentEquals(other.bytes)) return false
+            if (mime != other.mime) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = bytes.contentHashCode()
+            result = 31 * result + mime.hashCode()
+            return result
+        }
+    }
 
     private fun classpath(resourcePath: String): Resource? {
         val bytes = javaClass.getResourceAsStream(resourcePath)?.use { it.readBytes() }
