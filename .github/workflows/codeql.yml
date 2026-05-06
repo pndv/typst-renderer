@@ -43,7 +43,7 @@ jobs:
           build-mode: manual
 
       - name: Build with Gradle
-        run: ./gradlew --no-daemon buildPlugin -x test
+        run: ./gradlew --no-daemon compileKotlin compileTestKotlin
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
