@@ -23,7 +23,7 @@ jobs:
             runIde: |
               export DISPLAY=:99.0
               Xvfb -ac :99 -screen 0 1920x1080x16 &
-              gradle runIdeForUiTests &
+              ./gradlew runIdeForUiTests &
           - os: windows-latest
             runIde: start gradlew.bat runIdeForUiTests
           - os: macos-latest
@@ -31,20 +31,9 @@ jobs:
 
     steps:
 
-      # Check out the current repository
-      - name: Fetch Sources
-        uses: actions/checkout@v6
-
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
-
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      # Set up the environment for the next steps
+      - name: Checkout and Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
 
