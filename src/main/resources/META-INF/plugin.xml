@@ -70,7 +70,7 @@
                 implementation="com.github.pndv.typstrenderer.editor.PdfjsPreviewServer"/>
     </extensions>
 
-    <actions>
+    <actions resource-bundle="messages.TypstActionsBundle">
         <action id="Typst.Compile"
                 class="com.github.pndv.typstrenderer.actions.TypstCompileAction"
                 icon="AllIcons.Actions.Execute">
