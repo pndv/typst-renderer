@@ -1,10 +1,7 @@
-name: Checkout and Setup Java and Gradle
+name: Setup Java and Gradle
 description: Checks out the repo, sets up Java and Gradle with standard project settings
 
 inputs:
-  ref:
-    description: The ref (branch, tag, SHA) to checkout. Defaults to the triggered ref.
-    default: ''
   cache-read-only:
     description: Whether Gradle cache should be read-only
     default: 'false'
@@ -12,10 +9,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Fetch Sources
-      uses: actions/checkout@v6
-      with:
-        ref: ${{ inputs.ref }}
 
     - name: Setup Java
       uses: actions/setup-java@v5

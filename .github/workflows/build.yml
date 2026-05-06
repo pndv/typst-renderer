@@ -90,8 +90,12 @@ jobs:
           tool-cache: false
           large-packages: false
 
+      - name: Fetch Sources
+        uses: actions/checkout@v6
+
+
       # Set up the environment for the next steps
-      - name: Checkout and Setup Java and Gradle
+      - name: Setup Java and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
@@ -167,8 +171,11 @@ jobs:
           tool-cache: false
           large-packages: false
 
+      - name: Fetch Sources
+        uses: actions/checkout@v6
+
       # Set up the environment for the next steps
-      - name: Checkout and Setup Java and Gradle
+      - name: Setup Java and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
@@ -196,9 +203,11 @@ jobs:
       contents: write
     steps:
 
+      - name: Fetch Sources
+        uses: actions/checkout@v6
 
       # Set up the environment for the next steps
-      - name: Checkout and Setup Java and Gradle
+      - name: Setup Java and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true

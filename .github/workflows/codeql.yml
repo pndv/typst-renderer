@@ -30,7 +30,10 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      - name: Checkout and Setup Java and Gradle
+      - name: Fetch Sources
+        uses: actions/checkout@v6
+
+      - name: Setup Java and Gradle
         uses: ./.github/actions/setup-java-gradle
 
       - name: Initialize CodeQL
