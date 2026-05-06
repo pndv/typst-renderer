@@ -90,20 +90,13 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
 
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      # Set up the environment for the next steps
+      - name: Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
 
@@ -178,20 +171,12 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
-
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      # Set up the environment for the next steps
+      - name: Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
 
@@ -218,20 +203,12 @@ jobs:
       contents: write
     steps:
 
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
-
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      # Set up the environment for the next steps
+      - name: Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
 

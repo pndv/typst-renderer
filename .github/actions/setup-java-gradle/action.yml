@@ -1,0 +1,22 @@
+name: Setup Java and Gradle
+description: Checks out the repo, sets up Java and Gradle with standard project settings
+
+inputs:
+  cache-read-only:
+    description: Whether Gradle cache should be read-only
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+
+    - name: Setup Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: zulu
+        java-version: 21
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+      with:
+        cache-read-only: ${{ inputs.cache-read-only }}
