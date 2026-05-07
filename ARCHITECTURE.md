@@ -175,8 +175,8 @@ src/main/kotlin/com/github/pndv/typstrenderer/
 │   ├── TypstCompileAction.kt               — Compile menu action (Ctrl+Shift+T)
 │   └── TypstWatchAction.kt                 — Watch toggle action
 ├── settings/
-│   ├── TypstSettings.kt                    — Persistent settings (paths, flags)
-│   └── TypstConfigurable.kt                — Settings UI (Tools > Typst)
+│   ├── TypstSettingsState.kt                    — Persistent settings (paths, flags)
+│   └── TypstSettingsConfigurable.kt                — Settings UI (Tools > Typst)
 └── toolWindow/
     └── TypstOutputToolWindowFactory.kt     — Output console (bottom panel)
 ```
