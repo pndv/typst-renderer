@@ -1,5 +1,6 @@
 package com.github.pndv.typstrenderer.settings
 
+import com.github.pndv.typstrenderer.TypstBundle.message
 import com.github.pndv.typstrenderer.lsp.TinymistDownloadService
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
@@ -21,62 +22,60 @@ class TypstSettingsConfigurable : Configurable {
     private var tinymistStatusLabel: JBLabel? = null
     private var typstStatusLabel: JBLabel? = null
 
-    override fun getDisplayName(): String = "Typst"
+    override fun getDisplayName(): String = message("settings.displayName")
 
     override fun createComponent(): JComponent = panel {
-        group("Language Server (Tinymist)") {
-            row("Status:") {
+        group(message("settings.lsp.group.label")) {
+            row(message("settings.lsp.status.text")) {
                 tinymistStatusLabel = JBLabel(getTinymistStatusText()).also { cell(it) }
             }
-            row("Tinymist path:") {
+            row(message("settings.lsp.path.label")) {
                 textFieldWithBrowseButton(
                     FileChooserDescriptorFactory.singleFile()
-                        .withTitle("Select Tinymist Binary")
+                        .withTitle(message("settings.lsp.path.text"))
                 ).bindText(::tinymistPath)
-                    .comment("Path to the tinymist binary. Leave empty for auto-detection.")
+                    .comment(message("settings.lsp.path.comment"))
             }
             row {
-                button("Download Tinymist") {
-                    tinymistStatusLabel?.text = "Downloading..."
+                button(message("settings.lsp.download.label")) {
+                    tinymistStatusLabel?.text = message("settings.lsp.download.text")
                     TinymistDownloadService.getInstance().downloadInBackground(null) { success ->
-                        tinymistStatusLabel?.text = if (success) getTinymistStatusText() else "Download failed"
+                        tinymistStatusLabel?.text = if (success) getTinymistStatusText() else message("settings.lsp.download.failed.text")
                     }
-                }.comment("Downloads the latest tinymist binary from GitHub for this platform.")
+                }.comment(message("settings.lsp.download.comment"))
             }
         }
-        group("Compilation (Typst CLI)") {
-            row("Status:") {
+
+        group(message("settings.compiler.group.label")) {
+            row(message("settings.compiler.status.text")) {
                 typstStatusLabel = JBLabel(getTypstStatusText()).also { cell(it) }
             }
-            row("Typst CLI path:") {
+            row(message("settings.compiler.path.label")) {
                 textFieldWithBrowseButton(
-                    FileChooserDescriptorFactory.singleFile()
-                        .withTitle("Select Typst Binary")
-                ).bindText(::typstPath)
-                    .comment("Path to the typst CLI binary. Leave empty for auto-detection.")
+                    FileChooserDescriptorFactory.singleFile().withTitle(message("settings.compiler.path.select.text"))
+                ).comment(message("settings.compiler.path.comment"))
+                    .bindText(::typstPath)
             }
             row {
-                button("Download Typst") {
-                    typstStatusLabel?.text = "Downloading..."
-                    TypstDownloadService.getInstance().downloadInBackground(null) { success ->
-                        typstStatusLabel?.text = if (success) getTypstStatusText() else "Download failed"
+                button(message("settings.compiler.download.button.label")) {
+                    typstStatusLabel?.text = message("settings.compiler.download.text")
+                    TypstDownloadService.getInstance().downloadInBackground(null) {
+                        success ->
+                        typstStatusLabel?.text = if (success) getTypstStatusText() else message("settings.compiler.download.failed.text")
                     }
-                }.comment("Downloads the latest Typst CLI binary from GitHub for this platform.")
+                }.comment(message("settings.compiler.download.comment"))
             }
             row {
-                checkBox("Auto-compile on save")
+                checkBox(message("settings.compiler.checkbox.autoCompile"))
                     .bindSelected(::autoCompileOnSave)
             }
         }
-        group("Preview") {
+
+        group(message("settings.preview.group.label")) {
             row {
-                checkBox("Remember PDF preview scroll position across editor restarts")
+                checkBox(message("settings.preview.checkbox.label"))
+                    .comment(message("settings.preview.checkbox.comment"))
                     .bindSelected(::rememberPreviewScrollAcrossRestart)
-                    .comment(
-                        "When enabled, reopening a .typ file restores the preview to the page and " +
-                                "scroll offset you were viewing. Scroll position is always preserved " +
-                                "across recompilation within a session regardless of this setting."
-                    )
             }
         }
     }
@@ -110,9 +109,9 @@ class TypstSettingsConfigurable : Configurable {
         val manager = TinymistManager.getInstance()
         val resolvedPath = manager.resolveTinymistPath()
         return if (resolvedPath != null) {
-            "✓ Found: $resolvedPath"
+            message("settings.lsp.binary.found.text", resolvedPath)
         } else {
-            "✗ Not found (will auto-download when a .typ file is opened)"
+            message("settings.lsp.binary.notFound.text")
         }
     }
 
@@ -120,9 +119,9 @@ class TypstSettingsConfigurable : Configurable {
         val manager = TinymistManager.getInstance()
         val resolvedPath = manager.resolveTypstPath()
         return if (resolvedPath != null) {
-            "✓ Found: $resolvedPath"
+            message("settings.compiler.binary.found.text", resolvedPath)
         } else {
-            "✗ Not found (will auto-download when needed)"
+            message("settings.compiler.binary.notFound.text")
         }
     }
 }
