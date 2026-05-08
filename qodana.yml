@@ -10,3 +10,5 @@ exclude:
   - name: All
     paths:
       - .qodana
+      - src/main/resources/pdfjs
+      - src/main/resources/pdfjs-bridge.js
