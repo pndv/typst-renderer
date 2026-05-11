@@ -7,15 +7,18 @@
 ## [0.1.2] - 2026-05-07
 
 ### Added
+
 - CodeQL workflow for automated security scanning.
 - Reusable GitHub Actions for Java and Gradle setup across workflows.
 
 ### Fixed
+
 - Fixed an issue where user settings were not correctly persisted after a settings reload. Thanks to @ixmoyren for the report and fix!
 - Improved settings UI reliability by refactoring the configuration page to use modern IntelliJ UI DSL binding.
 - Formatting in ARCHITECTURE.md.
 
 ### Changed
+
 - Localised all strings on the Typst Settings configuration page using `TypstBundle`.
 - Refactored `TypstSettingsConfigurable` to bind UI components directly to the settings state, eliminating redundant local variables.
 
