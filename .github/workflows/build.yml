@@ -54,6 +54,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # Defensive sanity-check: the PDF.js viewer assets are vendored into
+      # src/main/resources/pdfjs and committed to git. If someone accidentally
+      # edits .gitignore or removes the un-ignore lines, local builds may
+      # still succeed from cache but a clean CI checkout will produce a
+      # broken plugin. Fail fast here instead.
+      - name: Verify PDF.js is pre-vendored
+        run: test -f src/main/resources/pdfjs/.version && test -f src/main/resources/pdfjs/web/viewer.html
+
       # Build plugin
       - name: Build plugin
         run: ./gradlew buildPlugin
