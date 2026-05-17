@@ -1,6 +1,6 @@
 [versions]
 # Vendored assets (not a Maven dep — consumed by the `downloadPdfJs` Gradle task).
-pdfjs = "4.10.38"
+pdfjs = "5.7.284"
 # libraries
 junit4 = "4.13.2"
 mockwebserver = "4.12.0"

@@ -13,6 +13,8 @@ import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.diagnostic.debug
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.wm.ToolWindowManager
@@ -23,14 +25,21 @@ class TypstWatchService(private val project: Project) : Disposable {
 
     private var processHandler: OSProcessHandler? = null
     private var watchedFile: String? = null
+    private val log = logger<TypstWatchService>()
 
     val isWatching: Boolean
         get() = processHandler?.isProcessTerminated == false && processHandler?.isProcessTerminating == false
 
     fun startWatch(inputPath: String) {
+        log.debug {"Starting watch for $inputPath. First, stop watching ..."}
+
         stopWatch()
 
+        log.debug {"Watch stopped for $inputPath. Now resuming..."}
+
         val typstBinary = TinymistManager.getInstance().resolveTypstPath()
+        log.debug {"Resolved typst binary: $typstBinary"}
+
         if (typstBinary == null) {
             TypstDownloadService.getInstance().downloadInBackground(project) { success ->
                 if (success) {
@@ -51,6 +60,8 @@ class TypstWatchService(private val project: Project) : Disposable {
             withCharset(Charsets.UTF_8)
             project.basePath?.let { withWorkingDirectory(Path.of(it)) }
         }
+
+        log.debug {"Typst Watch Service: CommandLine is: $commandLine"}
 
         val handler = OSProcessHandler(commandLine)
         handler.addProcessListener(object : ProcessListener {
