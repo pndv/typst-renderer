@@ -4,9 +4,12 @@
   "schedule": ["before 6am on monday"],
   "packageRules": [
     {
-      "matchPackagePatterns": ["^org\\.jetbrains\\.intellij", "^com\\.jetbrains\\.intellij"],
       "groupName": "IntelliJ Platform",
-      "schedule": ["before 6am on monday"]
+      "schedule": ["before 6am on monday"],
+      "matchPackageNames": [
+        "/^org\\.jetbrains\\.intellij/",
+        "/^com\\.jetbrains\\.intellij/"
+      ]
     },
     {
       "matchUpdateTypes": ["patch"],
@@ -16,7 +19,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["^gradle/libs\\.versions\\.toml$"],
+      "managerFilePatterns": [
+        "/^gradle/libs\\.versions\\.toml$/"
+      ],
       "matchStrings": ["pdfjs = \"(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "mozilla/pdf.js",
       "datasourceTemplate": "github-releases",
