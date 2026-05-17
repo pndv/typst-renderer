@@ -19,6 +19,12 @@ jobs:
 
     steps:
 
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+
       - name: Fetch Sources
         uses: actions/checkout@v6
 
@@ -30,7 +36,10 @@ jobs:
         with:
           languages: java-kotlin
           dependency-caching: true
-          build-mode: none
+          build-mode: manual
+
+      - name: Build with Gradle
+        run: ./gradlew compileKotlin compileTestKotlin --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
