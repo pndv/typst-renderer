@@ -1,5 +1,5 @@
 name: Setup Java and Gradle
-description: Checks out the repo, sets up Java and Gradle with standard project settings
+description: Sets up Java and Gradle with standard project settings
 
 inputs:
   cache-read-only:

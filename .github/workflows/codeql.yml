@@ -35,6 +35,7 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
+          dependency-caching: true
           build-mode: manual
 
       - name: Build with Gradle
