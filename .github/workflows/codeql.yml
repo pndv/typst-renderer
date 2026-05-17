@@ -35,10 +35,11 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
+          dependency-caching: true
           build-mode: manual
 
       - name: Build with Gradle
-        run: ./gradlew compileKotlin compileTestKotlin
+        run: ./gradlew compileKotlin compileTestKotlin --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
