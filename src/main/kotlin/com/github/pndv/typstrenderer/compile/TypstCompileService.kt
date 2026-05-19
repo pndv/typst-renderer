@@ -51,33 +51,36 @@ class TypstCompileService(private val project: Project) {
             project.basePath?.let { withWorkingDirectory(Path.of(it)) }
         }
 
-        try {
-            val handler = CapturingProcessHandler(commandLine)
-            val result = handler.runProcess(30_000)
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                val handler = CapturingProcessHandler(commandLine)
+                val result = handler.runProcess(30_000)
 
-            val notificationGroup =
-                NotificationGroupManager.getInstance().getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
+                val notificationGroup =
+                    NotificationGroupManager.getInstance().getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
 
-            if (result.exitCode == 0) {
-                val pdfPath = outputPath ?: (inputPath.removeSuffix(".typ") + ".pdf")
-                notificationGroup.createNotification(
-                    TypstBundle.message("notification.compile.success.title"),
-                    TypstBundle.message("notification.compile.success.body", pdfPath),
-                    NotificationType.INFORMATION
-                ).notify(project)
-            } else {
-                val stderr = result.stderr.ifBlank { result.stdout }
-                notificationGroup.createNotification(
-                    TypstBundle.message("notification.compile.failed.title"), stderr, NotificationType.ERROR
-                ).notify(project)
-                printErrorToConsole(TypstBundle.message("console.compile.failed", stderr))
+                if (result.exitCode == 0) {
+                    val pdfPath = outputPath ?: (inputPath.removeSuffix(".typ") + ".pdf")
+                    notificationGroup.createNotification(
+                        TypstBundle.message("notification.compile.success.title"),
+                        TypstBundle.message("notification.compile.success.body", pdfPath),
+                        NotificationType.INFORMATION
+                    ).notify(project)
+                } else {
+                    val stderr = result.stderr.ifBlank { result.stdout }
+                    notificationGroup.createNotification(
+                        TypstBundle.message("notification.compile.failed.title"), stderr, NotificationType.ERROR
+                    ).notify(project)
+                    printErrorToConsole(TypstBundle.message("console.compile.failed", stderr))
+                }
+            } catch (e: Exception) {
+                val message = TypstBundle.message("notification.compile.error.body", e.message ?: "")
+                NotificationGroupManager.getInstance()
+                    .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
+                    .createNotification(TypstBundle.message("notification.compile.error.title"), message, NotificationType.ERROR)
+                    .notify(project)
+                printErrorToConsole("$message\n")
             }
-        } catch (e: Exception) {
-            val message = TypstBundle.message("notification.compile.error.body", e.message ?: "")
-            NotificationGroupManager.getInstance().getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID).createNotification(
-                    TypstBundle.message("notification.compile.error.title"), message, NotificationType.ERROR
-                ).notify(project)
-            printErrorToConsole("$message\n")
         }
     }
 
