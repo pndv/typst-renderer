@@ -1,5 +1,6 @@
 package com.github.pndv.typstrenderer.editor
 
+import com.github.pndv.typstrenderer.Common.printToConsole
 import com.github.pndv.typstrenderer.TYPST_OUTPUT_TOOL_WINDOW_ID
 import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.lsp.TinymistManager
@@ -12,7 +13,6 @@ import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessOutputTypes
-import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
@@ -349,7 +349,7 @@ class TypstFilePreviewer(
                         ProcessOutputTypes.SYSTEM -> ConsoleViewContentType.SYSTEM_OUTPUT
                         else -> ConsoleViewContentType.NORMAL_OUTPUT
                     }
-                    getConsoleView()?.print(event.text, contentType)
+                    printToConsole(project, log, event.text, contentType)
 
                     // Show errors in the browser panel and open the tool window
                     if (outputType == ProcessOutputTypes.STDERR && text.contains("error", ignoreCase = true)) {
@@ -370,7 +370,7 @@ class TypstFilePreviewer(
                 }
 
                 override fun processTerminated(event: ProcessEvent) {
-                    getConsoleView()?.print(
+                    printToConsole(project, log,
                         TypstBundle.message("console.preview.terminated", event.exitCode),
                         ConsoleViewContentType.SYSTEM_OUTPUT
                     )
@@ -401,12 +401,6 @@ class TypstFilePreviewer(
             )
             viewerLoaded = false
         }
-    }
-
-    private fun getConsoleView(): ConsoleView? {
-        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(TYPST_OUTPUT_TOOL_WINDOW_ID) ?: return null
-        val content = toolWindow.contentManager.getContent(0) ?: return null
-        return content.component as? ConsoleView
     }
 
     private fun stopWatching() {

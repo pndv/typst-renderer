@@ -84,5 +84,21 @@
                 icon="AllIcons.Actions.Restart">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
+
+        <!-- Attached as a left-edge toolbar, the toolbar is then set to SimpleToolWindowPanel.
+             Registered here (rather than created inline in the factory) so they're discoverable from the action search
+             palette and can be assigned keyboard shortcuts by the user. -->
+        <action id="Typst.RecompileFromOutput"
+                class="com.github.pndv.typstrenderer.actions.TypstRecompileFromOutputAction"
+                icon="AllIcons.Actions.Execute"/>
+        <action id="Typst.WatchToggleFromOutput"
+                class="com.github.pndv.typstrenderer.actions.TypstWatchToggleFromOutputAction"
+                icon="AllIcons.Actions.Restart"/>
+        <action id="Typst.ClearOutputConsole"
+                class="com.github.pndv.typstrenderer.actions.TypstClearOutputConsoleAction"
+                icon="AllIcons.Actions.GC"/>
+        <action id="Typst.ScrollOutputToEnd"
+                class="com.github.pndv.typstrenderer.actions.TypstScrollOutputToEndAction"
+                icon="AllIcons.RunConfigurations.Scroll_down"/>
     </actions>
 </idea-plugin>
