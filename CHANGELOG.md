@@ -4,6 +4,36 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-21
+
+### Added
+
+- Compilation errors now route to the Typst Output Console instead of notification bubbles.
+- Recompile, watch-toggle, scroll-to-bottom, and clear actions added directly to the Output Console toolbar.
+- `TypstConsoleHolder` introduced to hold a reference to the console window and place toolbar icons on the left per IntelliJ platform conventions.
+- `TypstLastCompiledTracker` to track the most recently compiled file across sessions.
+- Project-scoped settings (`TypstProjectSettingsState`) persisted to `TypstProjectSettings.xml`.
+- `TypstRootResolver` to determine the Typst project root via a priority chain (explicit project override → auto-detection), ensuring the correct `--root` argument is passed to the CLI.
+
+### Changed
+
+- Typst compilation moved off the Event Dispatch Thread onto a pooled thread, preventing "Synchronous execution on EDT" exceptions.
+- Debug logging added across `TypstWatchService` and `TinymistLspServerDescriptor` for improved traceability.
+- PDF.js vendored assets updated to v5.
+
+### Tests
+
+- `TypstLastCompiledTrackerTest` — last-compiled-file tracking behaviour.
+- `TypstRootResolverTest` — root resolution priority order and fallback logic.
+- `TypstSettingsStateTest` — round-trip persistence, accessor/state-field alignment, and mutation-in-place behaviour.
+- CI step added to verify vendored PDF.js assets are present, catching accidental `.gitignore` changes early.
+
+### Infrastructure
+
+- Switched from Dependabot to Renovate for Gradle and library dependency management.
+- Gradle wrapper updated to 9.5.1.
+- CodeQL and Qodana workflow fixes.
+
 ## [0.1.2] - 2026-05-07
 
 ### Added
@@ -112,7 +142,8 @@
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.1.2...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/pndv/typst-renderer/compare/0.1.2...0.2.0
 [0.1.2]: https://github.com/pndv/typst-renderer/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/pndv/typst-renderer/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/pndv/typst-renderer/compare/0.0.1...0.1.0
