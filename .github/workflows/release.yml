@@ -55,13 +55,13 @@ jobs:
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew publishPlugin
 
-      # Upload an artifact as a release asset
+      # Upload an artefact as a release asset
       - name: Upload Release Asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload ${{ github.event.release.tag_name }} ./build/distributions/*
 
-      # Create a pull request
+      # Create a pull request (if needed) with the updated changelog
       - name: Create Pull Request
         if: ${{ github.event.release.body != '' }}
         env:
@@ -75,6 +75,13 @@ jobs:
           git config user.name "GitHub Action"
 
           git checkout -b $BRANCH
+          
+          # Only commit and push if there are changes
+          if git diff --quiet HEAD; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
           git commit -am "Changelog update - $VERSION"
           git push --set-upstream origin $BRANCH
 
