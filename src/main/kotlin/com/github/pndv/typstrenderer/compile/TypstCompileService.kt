@@ -52,13 +52,14 @@ class TypstCompileService(private val project: Project) {
             return
         }
 
-        val commandLine = GeneralCommandLine(buildList {
-            add(typstBinary)
-            add("compile")
-            project.basePath?.let { add("--root"); add(it) }
-            add(inputPath)
-            outputPath?.let { add(it) }
-        }).apply {
+        val commandLine = GeneralCommandLine(
+            TypstCommandBuilder.buildCompileCommand(
+                binary = typstBinary,
+                inputPath = inputPath,
+                outputPath = outputPath,
+                root = project.basePath,
+            )
+        ).apply {
             withCharset(Charsets.UTF_8)
             project.basePath?.let { withWorkingDirectory(Path.of(it)) }
         }
