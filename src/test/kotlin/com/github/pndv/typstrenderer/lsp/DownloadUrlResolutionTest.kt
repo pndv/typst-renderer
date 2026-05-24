@@ -90,7 +90,7 @@ class DownloadUrlResolutionTest {
         assertNull(url)
     }
 
-    // ---- D.55  HEAD network error → returns null ----
+    // ---- HEAD network error → returns null ----
 
     @Test
     fun tinymist_resolveLatestDownloadUrl_networkError_returnsNull() {

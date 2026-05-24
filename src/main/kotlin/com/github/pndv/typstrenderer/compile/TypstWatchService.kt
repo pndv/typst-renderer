@@ -59,12 +59,11 @@ class TypstWatchService(private val project: Project) : Disposable {
         }
 
         val commandLine = GeneralCommandLine(
-            buildList {
-                add(typstBinary)
-                add("watch")
-                project.basePath?.let { add("--root"); add(it) }
-                add(inputPath)
-            }
+            TypstCommandBuilder.buildWatchCommand(
+                binary = typstBinary,
+                inputPath = inputPath,
+                root = project.basePath,
+            )
         ).apply {
             withCharset(Charsets.UTF_8)
             project.basePath?.let { withWorkingDirectory(Path.of(it)) }
