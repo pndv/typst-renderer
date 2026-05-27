@@ -9,7 +9,6 @@ import com.github.pndv.typstrenderer.lsp.TypstDownloadService
 import com.github.pndv.typstrenderer.settings.TypstSettingsState
 import com.github.pndv.typstrenderer.theme.TypstThemeListener
 import com.github.pndv.typstrenderer.theme.TypstThemeService
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
@@ -42,7 +41,6 @@ import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
 import java.beans.PropertyChangeListener
 import java.io.File
-import java.nio.file.Path
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.swing.JComponent

@@ -4,7 +4,6 @@ import com.github.pndv.typstrenderer.settings.TypstProjectSettingsState
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.openapi.project.Project
 import org.junit.Assert.assertEquals
-import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -30,13 +29,10 @@ import org.junit.BeforeClass
  */
 class TypstCommandBuilderTest {
 
-
-
     companion object {
-
-        private val binary = "/usr/local/bin/typst"
-        private val inputPath = "chapters/intro.typ"
-        private val outputPath = "build/intro.pdf"
+        private const val binary = "/usr/local/bin/typst"
+        private const val inputPath = "chapters/intro.typ"
+        private const val outputPath = "build/intro.pdf"
         private lateinit var root: String
         private lateinit var fontPath: String // = "/home/user/.fonts"
         private lateinit var projectSettingsAll: TypstProjectSettingsState
