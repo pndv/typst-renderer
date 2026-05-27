@@ -52,7 +52,9 @@ dependencies {
         exclude(group = "org.jetbrains.kotlin")
     }
     testImplementation(libs.opentest4j)
-    testImplementation(libs.mockitoKotlin)
+    testImplementation(libs.mockitoKotlin) {
+        exclude(group = "org.jetbrains.kotlin")
+    }
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
