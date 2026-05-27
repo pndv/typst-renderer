@@ -1,9 +1,9 @@
 package com.github.pndv.typstrenderer.lsp
 
-import org.junit.After
+import org.junit.AfterClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Before
+import org.junit.BeforeClass
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
@@ -17,47 +17,54 @@ import java.nio.file.Files
  * coverage of the resolution priority without needing a
  * `BasePlatformTestCase` fixture — same pattern as [BinaryResolutionTest].
  *
- * Each test creates a real temporary directory rather than mocking
- * filesystem access, so the `File(...).isDirectory` guard in the
- * production code is exercised verbatim.
+ * The temp directory and its fixture paths (an override directory, a
+ * basePath directory, a non-existent path, and a regular file) are built
+ * once in `@BeforeClass` and torn down once in `@AfterClass`. The fixtures
+ * are read-only by design — no test mutates them — so sharing across the
+ * suite is safe and avoids creating a fresh tempdir for every test.
  */
 class TypstRootResolverTest {
 
-    private var workDir: File? = null
+    companion object {
+        private var workDir: File? = null
+        private lateinit var overrideRootPath: String
+        private lateinit var basePath: String
+        private lateinit var missingPath: String
+        private lateinit var regularFilePath: String
 
-    @Before
-    fun setUp() {
-        workDir = Files.createTempDirectory("typst-root-resolve-test").toFile()
+        @JvmStatic
+        @BeforeClass
+        fun setUpClass() {
+            workDir = Files.createTempDirectory("typst-root-resolve-test").toFile()
+            overrideRootPath = File(workDir, "override-root").apply { mkdirs() }.absolutePath
+            basePath = File(workDir, "base-path").apply { mkdirs() }.absolutePath
+            missingPath = File(workDir, "does-not-exist").absolutePath
+            regularFilePath = File(workDir, "not-a-directory")
+                .apply { writeText("regular file") }.absolutePath
+        }
+
+        @JvmStatic
+        @AfterClass
+        fun tearDownClass() {
+            workDir?.deleteRecursively()
+        }
     }
-
-    @After
-    fun tearDown() {
-        workDir?.deleteRecursively()
-    }
-
-    private fun realDir(name: String): File =
-        File(workDir, name).apply { mkdirs() }
 
     @Test
     fun resolveTypstRoot_configuredOverrideExists_winsOverBasePath() {
-        val override = realDir("override-root")
-        val basePath = realDir("base-path").absolutePath
-
         val result = resolveTypstRoot(
-            configuredOverride = override.absolutePath,
+            configuredOverride = overrideRootPath,
             projectBasePath = basePath,
         )
 
         assertEquals(
             "Stage 1 (configured override) should win over stage 2 (basePath)",
-            override.absolutePath, result,
+            overrideRootPath, result,
         )
     }
 
     @Test
     fun resolveTypstRoot_configuredOverrideBlank_fallsThroughToBasePath() {
-        val basePath = realDir("base-path").absolutePath
-
         val result = resolveTypstRoot(
             configuredOverride = "",
             projectBasePath = basePath,
@@ -68,8 +75,6 @@ class TypstRootResolverTest {
 
     @Test
     fun resolveTypstRoot_configuredOverrideWhitespace_fallsThroughToBasePath() {
-        val basePath = realDir("base-path").absolutePath
-
         val result = resolveTypstRoot(
             configuredOverride = "   ",
             projectBasePath = basePath,
@@ -80,11 +85,8 @@ class TypstRootResolverTest {
 
     @Test
     fun resolveTypstRoot_configuredOverridePointsToMissingDir_fallsThroughToBasePath() {
-        val basePath = realDir("base-path").absolutePath
-        val missingOverride = File(workDir, "does-not-exist").absolutePath
-
         val result = resolveTypstRoot(
-            configuredOverride = missingOverride,
+            configuredOverride = missingPath,
             projectBasePath = basePath,
         )
 
@@ -96,11 +98,8 @@ class TypstRootResolverTest {
 
     @Test
     fun resolveTypstRoot_configuredOverridePointsToRegularFile_fallsThroughToBasePath() {
-        val basePath = realDir("base-path").absolutePath
-        val asFile = File(workDir, "not-a-directory").apply { writeText("regular file") }
-
         val result = resolveTypstRoot(
-            configuredOverride = asFile.absolutePath,
+            configuredOverride = regularFilePath,
             projectBasePath = basePath,
         )
 
@@ -122,25 +121,21 @@ class TypstRootResolverTest {
 
     @Test
     fun resolveTypstRoot_configuredOverrideExistsAndBasePathNull_returnsOverride() {
-        val override = realDir("override-root")
-
         val result = resolveTypstRoot(
-            configuredOverride = override.absolutePath,
+            configuredOverride = overrideRootPath,
             projectBasePath = null,
         )
 
         assertEquals(
             "Override should be honoured even when project has no basePath (light edit mode)",
-            override.absolutePath, result,
+            overrideRootPath, result,
         )
     }
 
     @Test
     fun resolveTypstRoot_configuredOverrideMissingAndBasePathNull_returnsNull() {
-        val missingOverride = File(workDir, "does-not-exist").absolutePath
-
         val result = resolveTypstRoot(
-            configuredOverride = missingOverride,
+            configuredOverride = missingPath,
             projectBasePath = null,
         )
 

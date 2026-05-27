@@ -19,6 +19,13 @@ class TypstOutputToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         log.debug { "Creating TypstOutputToolWindowFactory for project ${project.name}" }
         val console = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
+
+        // Hyperlink typst error / warning locations (path:line:col) into the
+        // editor. All three output paths — TypstCompileService, TypstWatchService,
+        // TypstFilePreviewer — write into this shared console, so a single filter
+        // registration covers every code path that emits typst diagnostics.
+        console.addMessageFilter(TypstConsoleFilter(project))
+
         val consoleHolder = project.service<TypstConsoleHolder>()
         consoleHolder.console = console
 

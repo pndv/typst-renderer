@@ -23,10 +23,13 @@ import java.io.File
  * scope; today it's a silent fallthrough, matching the pre-Part-A
  * behaviour where no override existed.)
  */
-fun resolveTypstRoot(project: Project): String? = resolveTypstRoot(
-    configuredOverride = TypstProjectSettingsState.getInstance(project).typstProjectRoot,
-    projectBasePath = project.basePath,
-)
+fun resolveTypstRoot(project: Project): String? {
+    if (project.isDisposed) return null
+    return resolveTypstRoot(
+        configuredOverride = TypstProjectSettingsState.getInstance(project).typstProjectRoot,
+        projectBasePath = project.basePath,
+    )
+}
 
 /**
  * Pure-function core of [resolveTypstRoot]. Exposed for unit testing without
@@ -42,4 +45,27 @@ internal fun resolveTypstRoot(
         return configuredOverride
     }
     return projectBasePath
+}
+
+/**
+ * Resolves the font search path to pass via `--font-path` to the typst CLI
+ * and tinymist LSP.
+ *
+ * Returns [TypstProjectSettingsState.typstFontPath] when it is non-blank and
+ * points to an existing directory, otherwise `null`. A `null` return means
+ * the flag should be omitted entirely — typst will use its built-in font
+ * discovery.
+ *
+ * Unlike [resolveTypstRoot] there is no project-base-path fallback: font
+ * directories are rarely co-located with the project root, so falling through
+ * silently would be more surprising than returning `null`.
+ */
+fun resolveTypstFontPath(project: Project): String? {
+    if (project.isDisposed) return null
+
+    val fontPath: String = TypstProjectSettingsState.getInstance(project).typstFontPath
+    if (fontPath.isNotBlank() && File(fontPath).isDirectory) {
+        return fontPath
+    }
+    return null
 }

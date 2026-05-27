@@ -4,6 +4,37 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-27
+
+### Added
+
+- Per-project font path setting (`typstFontPath`) in `TypstProjectSettingsState` — a folder-picker row in the new project-scoped settings page lets users point the compiler and LSP at a project-local `fonts/` directory.
+- `resolveTypstFontPath(project)` resolver helper alongside the existing `resolveTypstRoot` — returns the configured path if non-blank and the directory exists, otherwise `null`.
+- Font path wired into all three typst CLI invocations (`TypstCompileService`, `TypstWatchService`, `TypstFilePreviewer`) and into the tinymist LSP descriptor via `--font-path`.
+- `TypstProjectSettingsConfigurable` — dedicated project-scoped settings page under **Settings → Tools → Typst → Project Overrides**, surfacing both the project root and font path overrides.
+- Applying a changed project root or font path via settings now bounces the tinymist LSP so the new argv takes effect immediately without an IDE restart.
+
+### Changed
+
+- `TypstCommandBuilder.buildCompileCommand` and `buildWatchCommand` now return `GeneralCommandLine` instead of `List<String>`, constructing the full command — including charset and working directory — in one place. Root and font path are resolved once per call, so `--root` and `withWorkingDirectory` always agree.
+- `TypstRootResolver` renamed to `TypstParamResolver`; the file now owns both `resolveTypstRoot` and `resolveTypstFontPath`, each with a `project.isDisposed` guard.
+- `TypstConsoleFilter` refactored to a stateless per-line approach — the `LineKind` state machine is replaced by two anchored regexes, with the rich-format anchor (`┌─`) tried before the compact format to prevent false positives on box-drawing characters.
+
+### Fixed
+
+- `resolveTypstRoot(Project)` and `resolveTypstFontPath(Project)` now check `project.isDisposed` before calling `project.getService()`, preventing exceptions when the project is torn down during shutdown.
+- `TypstProjectSettingsConfigurable.apply()`: LSP restart baselines are now updated inside the `finally` block of the pooled restart thread. Previously, updating them synchronously on the EDT before the restart ran meant a rapid second Apply() saw no diff and silently skipped its own restart.
+
+### Tests
+
+- `TypstCommandBuilderTest` updated for the `GeneralCommandLine` return type; the shared `@Before` mock setup replaced with explicit per-test `whenever(...)` stubs for correct isolation; `GeneralCommandLine.argv()` extension function added for assertion clarity.
+
+### Infrastructure
+
+- Sandbox builds switched from `intellijIdeaUltimate` to `intellijIdea`.
+- Mockito-Kotlin added as a test dependency.
+- `downloadSources = true` added for IntelliJ Platform artifacts.
+
 ## [0.2.0] - 2026-05-21
 
 ### Added
@@ -142,7 +173,8 @@
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/pndv/typst-renderer/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/pndv/typst-renderer/compare/0.1.2...0.2.0
 [0.1.2]: https://github.com/pndv/typst-renderer/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/pndv/typst-renderer/compare/0.1.0...0.1.1
