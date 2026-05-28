@@ -47,6 +47,11 @@
                 instance="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
                 id="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
                 bundle="messages.TypstBundle" key="settings.displayName" />
+        <projectConfigurable
+                parentId="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
+                instance="com.github.pndv.typstrenderer.settings.TypstProjectSettingsConfigurable"
+                id="com.github.pndv.typstrenderer.settings.TypstProjectSettingsConfigurable"
+                bundle="messages.TypstBundle" key="settings.project.displayName" />
 
 
         <!-- Tool window for compilation output -->

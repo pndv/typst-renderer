@@ -22,7 +22,11 @@ import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 class TypstProjectSettingsState : PersistentStateComponent<TypstProjectSettingsState.State> {
 
     data class State(
+        // The `--root` argument to `typst` cli/tinymist.
         var typstProjectRoot: String = "",
+
+        // The `--font-path` argument to `typst` cli/tinymist.
+        var typstFontPath: String = "",
     )
 
     private var state = State()
@@ -31,10 +35,14 @@ class TypstProjectSettingsState : PersistentStateComponent<TypstProjectSettingsS
         get() = state.typstProjectRoot
         set(value) { state.typstProjectRoot = value }
 
+    var typstFontPath: String
+        get() = state.typstFontPath
+        set(value) { state.typstFontPath = value }
+
     override fun getState(): State = state
 
     override fun loadState(state: State) {
-        // Mutate in place rather than swapping the reference. Same persistence
+        // Mutate in place rather than swapping the reference. Same persistence-bug
         // gotcha as [TypstSettingsState] — reassigning the field loses the
         // serializer's tracked identity and silently breaks settings persistence
         // (shipped twice in 0.1.0/0.1.1 before the 0.1.2 fix).

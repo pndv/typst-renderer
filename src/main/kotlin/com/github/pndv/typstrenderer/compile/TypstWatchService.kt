@@ -6,7 +6,6 @@ import com.github.pndv.typstrenderer.TYPST_OUTPUT_TOOL_WINDOW_ID
 import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
@@ -20,7 +19,6 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.wm.ToolWindowManager
-import java.nio.file.Path
 
 @Service(Service.Level.PROJECT)
 class TypstWatchService(private val project: Project) : Disposable {
@@ -58,16 +56,11 @@ class TypstWatchService(private val project: Project) : Disposable {
             return
         }
 
-        val commandLine = GeneralCommandLine(
-            TypstCommandBuilder.buildWatchCommand(
-                binary = typstBinary,
-                inputPath = inputPath,
-                root = project.basePath,
-            )
-        ).apply {
-            withCharset(Charsets.UTF_8)
-            project.basePath?.let { withWorkingDirectory(Path.of(it)) }
-        }
+        val commandLine = TypstCommandBuilder.buildWatchCommand(
+            binary = typstBinary,
+            inputPath = inputPath,
+            project = project,
+        )
 
         log.debug {"Typst Watch Service: CommandLine is: $commandLine"}
 

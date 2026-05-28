@@ -3,12 +3,12 @@ package com.github.pndv.typstrenderer.editor
 import com.github.pndv.typstrenderer.Common.printToConsole
 import com.github.pndv.typstrenderer.TYPST_OUTPUT_TOOL_WINDOW_ID
 import com.github.pndv.typstrenderer.TypstBundle
+import com.github.pndv.typstrenderer.compile.TypstCommandBuilder.buildWatchCommand
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
 import com.github.pndv.typstrenderer.settings.TypstSettingsState
 import com.github.pndv.typstrenderer.theme.TypstThemeListener
 import com.github.pndv.typstrenderer.theme.TypstThemeService
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
@@ -41,7 +41,6 @@ import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
 import java.beans.PropertyChangeListener
 import java.io.File
-import java.nio.file.Path
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.swing.JComponent
@@ -318,18 +317,7 @@ class TypstFilePreviewer(
 
         log.info("Starting typst watch for ${file.path} -> ${outputPdf.absolutePath}")
         log.info("Project base path for ${file.path} -> ${project.basePath}")
-        val commandLine = GeneralCommandLine(
-            buildList {
-                add(typstBinary)
-                add("watch")
-                project.basePath?.let { add("--root"); add(it) }
-                add(file.path)
-                add(outputPdf.absolutePath)
-            }
-        ).apply {
-            withCharset(Charsets.UTF_8)
-            project.basePath?.let { withWorkingDirectory(Path.of(it)) }
-        }
+        val commandLine = buildWatchCommand(typstBinary, inputPath = file.path, project = project, outputPath = outputPdf.absolutePath)
 
         try {
             val handler = object : OSProcessHandler(commandLine) {

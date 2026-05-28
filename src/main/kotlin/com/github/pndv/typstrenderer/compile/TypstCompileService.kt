@@ -5,7 +5,6 @@ import com.github.pndv.typstrenderer.TYPST_NOTIFICATION_GROUP_ID
 import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.github.pndv.typstrenderer.lsp.TypstDownloadService
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.notification.NotificationGroupManager
@@ -16,7 +15,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import java.nio.file.Path
 
 @Service(Service.Level.PROJECT)
 class TypstCompileService(private val project: Project) {
@@ -52,17 +50,12 @@ class TypstCompileService(private val project: Project) {
             return
         }
 
-        val commandLine = GeneralCommandLine(
-            TypstCommandBuilder.buildCompileCommand(
-                binary = typstBinary,
-                inputPath = inputPath,
-                outputPath = outputPath,
-                root = project.basePath,
-            )
-        ).apply {
-            withCharset(Charsets.UTF_8)
-            project.basePath?.let { withWorkingDirectory(Path.of(it)) }
-        }
+        val commandLine = TypstCommandBuilder.buildCompileCommand(
+            binary = typstBinary,
+            inputPath = inputPath,
+            project = project,
+            outputPath = outputPath,
+        )
 
         // Immediate feedback in the tool window before the pooled-thread work starts;
         // also pops the window open so the user sees subsequent outcome messages.

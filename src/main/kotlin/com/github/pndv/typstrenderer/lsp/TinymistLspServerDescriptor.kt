@@ -51,11 +51,15 @@ class TinymistLspServerDescriptor(
         log.debug { "Creating Tinymist LSP command line" }
 
         val typstRoot = resolveTypstRoot(project)
-        log.debug { "Typst root: $typstRoot" }
+        log.debug { "Typst project root: $typstRoot" }
+
+        val fontPath = resolveTypstFontPath(project)
+        log.debug { "Typst project Font path: $fontPath" }
 
         val commandLine = GeneralCommandLine (buildList{
             add(tinymistPath)
             add("lsp")
+            fontPath?.let { add("--font-path"); add(it) }
         }).apply {
             withCharset(Charsets.UTF_8)
             typstRoot?.let { withWorkingDirectory(Path.of(it)) }
