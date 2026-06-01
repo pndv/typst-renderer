@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Endpoint helpers for the PDF.js viewer served by [PdfjsPreviewServer].
  *
  * We piggyback on IntelliJ's Built-In Netty Server (the same one used for LSP
- * and REST endpoints) instead of registering a JCEF [org.cef.handler.CefSchemeHandlerFactory].
+ * and REST endpoints) instead of registering a JCEF
  * Reasons:
  *  - Works in both in-process and remote JCEF (the latter is the default in
  *    2024.3+ IDEs and bypasses per-browser request handlers for sub-resources).
@@ -103,8 +103,11 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
 
     private val log = logger<PdfjsPreviewServer>()
 
-    override fun isSupported(request: FullHttpRequest): Boolean {
-        val path = QueryStringDecoder(request.uri()).path()
+    override fun isSupported(request: FullHttpRequest): Boolean =
+        isSupportedUri(request.uri())
+
+    internal fun isSupportedUri(uri: String): Boolean {
+        val path = QueryStringDecoder(uri).path()
         return path.startsWith("/${PdfjsEndpoints.NAMESPACE}/")
     }
 
@@ -118,24 +121,7 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
 
         log.info("[pdfjs] http request: $fullPath")
 
-        val resource: Resource? = when {
-            path.startsWith("/viewer/") -> {
-                val resourcePath = "/pdfjs/" + path.removePrefix("/viewer/")
-                classpath(resourcePath)
-            }
-            path.startsWith("/pdf/") -> {
-                val id = path.removePrefix("/pdf/")
-                val reg = PdfjsPreviewerRegistry.get(id)
-                reg?.currentPdf?.invoke()?.let { fileResource(it, "application/pdf") }
-            }
-            path.startsWith("/bridge/") -> {
-                val id = path.removePrefix("/bridge/")
-                val reg = PdfjsPreviewerRegistry.get(id)
-                val js = reg?.bridgeJs?.invoke().orEmpty()
-                Resource(js.toByteArray(Charsets.UTF_8), "application/javascript; charset=utf-8")
-            }
-            else -> null
-        }
+        val resource: Resource? = route(path)
 
         if (resource == null) {
             log.warn("[pdfjs] 404: $fullPath")
@@ -157,6 +143,28 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
         return true
     }
 
+    internal fun route(path: String): Resource? = when {
+        path.startsWith("/viewer/") -> {
+            val resourcePath = "/pdfjs/" + path.removePrefix("/viewer/")
+            classpath(resourcePath)
+        }
+        path.startsWith("/pdf/") -> {
+            val id = path.removePrefix("/pdf/")
+            val reg = PdfjsPreviewerRegistry.get(id)
+            reg?.currentPdf?.invoke()?.let { fileResource(it, "application/pdf") }
+        }
+        path.startsWith("/bridge/") -> {
+            val id = path.removePrefix("/bridge/")
+            val reg = PdfjsPreviewerRegistry.get(id)
+            val js = reg?.bridgeJs?.invoke().orEmpty()
+            Resource(js.toByteArray(Charsets.UTF_8), "application/javascript; charset=utf-8")
+        }
+        else -> {
+            log.warn("[pdfjs] unsupported path: $path. Returning null.")
+            null
+        }
+    }
+
     private fun sendStatus(
         status: HttpResponseStatus,
         request: FullHttpRequest,
@@ -166,7 +174,25 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
         resp.send(context.channel(), request)
     }
 
-    private data class Resource(val bytes: ByteArray, val mime: String)
+    internal data class Resource(val bytes: ByteArray, val mime: String) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as Resource
+
+            if (!bytes.contentEquals(other.bytes)) return false
+            if (mime != other.mime) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = bytes.contentHashCode()
+            result = 31 * result + mime.hashCode()
+            return result
+        }
+    }
 
     private fun classpath(resourcePath: String): Resource? {
         val bytes = javaClass.getResourceAsStream(resourcePath)?.use { it.readBytes() }

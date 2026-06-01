@@ -54,6 +54,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # Defensive sanity-check: the PDF.js viewer assets are vendored into
+      # src/main/resources/pdfjs and committed to git. If someone accidentally
+      # edits .gitignore or removes the un-ignore lines, local builds may
+      # still succeed from cache but a clean CI checkout will produce a
+      # broken plugin. Fail fast here instead.
+      - name: Verify PDF.js is pre-vendored
+        run: test -f src/main/resources/pdfjs/.version && test -f src/main/resources/pdfjs/web/viewer.html
+
       # Build plugin
       - name: Build plugin
         run: ./gradlew buildPlugin
@@ -90,20 +98,13 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
 
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      # Set up the environment for the next steps
+      - name: Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
 
@@ -163,6 +164,8 @@ jobs:
         uses: JetBrains/qodana-action@v2026.1.0
         with:
           cache-default-branch-only: true
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
 
   # Run plugin structure verification along with IntelliJ Plugin Verifier
   verify:
@@ -178,20 +181,12 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
-
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      # Set up the environment for the next steps
+      - name: Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
 
@@ -218,20 +213,12 @@ jobs:
       contents: write
     steps:
 
-      # Check out the current repository
       - name: Fetch Sources
         uses: actions/checkout@v6
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
-
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+      # Set up the environment for the next steps
+      - name: Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
         with:
           cache-read-only: true
 

@@ -2,6 +2,8 @@ package com.github.pndv.typstrenderer.lsp
 
 import com.github.pndv.typstrenderer.language.TypstFileType
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.diagnostic.debug
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.ProjectWideLspServerDescriptor
@@ -9,11 +11,12 @@ import com.intellij.platform.lsp.api.customization.LspCustomization
 import com.intellij.platform.lsp.api.customization.LspFormattingSupport
 import com.intellij.platform.lsp.api.customization.LspSemanticTokensSupport
 import com.intellij.psi.PsiFile
+import java.nio.file.Path
 
 class TinymistLspServerDescriptor(
     project: Project, private val tinymistPath: String
 ) : ProjectWideLspServerDescriptor(project, "Tinymist") {
-
+    private val log = logger<TinymistLspServerDescriptor>()
 
     /**
      * Customizes LSP feature support for the Tinymist language server.
@@ -45,9 +48,25 @@ class TinymistLspServerDescriptor(
     override fun isSupportedFile(file: VirtualFile): Boolean = file.fileType == TypstFileType
 
     override fun createCommandLine(): GeneralCommandLine {
-        return GeneralCommandLine(tinymistPath, "lsp").apply {
+        log.debug { "Creating Tinymist LSP command line" }
+
+        val typstRoot = resolveTypstRoot(project)
+        log.debug { "Typst project root: $typstRoot" }
+
+        val fontPath = resolveTypstFontPath(project)
+        log.debug { "Typst project Font path: $fontPath" }
+
+        val commandLine = GeneralCommandLine (buildList{
+            add(tinymistPath)
+            add("lsp")
+            fontPath?.let { add("--font-path"); add(it) }
+        }).apply {
             withCharset(Charsets.UTF_8)
-            project.basePath?.let { withWorkDirectory(it) }
+            typstRoot?.let { withWorkingDirectory(Path.of(it)) }
         }
+
+        log.debug {"TinyMist LSP Server CommandLine is: $commandLine"}
+
+        return commandLine
     }
 }

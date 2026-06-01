@@ -47,6 +47,11 @@
                 instance="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
                 id="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
                 bundle="messages.TypstBundle" key="settings.displayName" />
+        <projectConfigurable
+                parentId="com.github.pndv.typstrenderer.settings.TypstSettingsConfigurable"
+                instance="com.github.pndv.typstrenderer.settings.TypstProjectSettingsConfigurable"
+                id="com.github.pndv.typstrenderer.settings.TypstProjectSettingsConfigurable"
+                bundle="messages.TypstBundle" key="settings.project.displayName" />
 
 
         <!-- Tool window for compilation output -->
@@ -70,11 +75,9 @@
                 implementation="com.github.pndv.typstrenderer.editor.PdfjsPreviewServer"/>
     </extensions>
 
-    <actions resource-bundle="messages.TypstBundle">
+    <actions>
         <action id="Typst.Compile"
                 class="com.github.pndv.typstrenderer.actions.TypstCompileAction"
-                text="%compile.action.text"
-                description="%compile.action.description"
                 icon="AllIcons.Actions.Execute">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
@@ -83,10 +86,24 @@
 
         <action id="Typst.Watch"
                 class="com.github.pndv.typstrenderer.actions.TypstWatchAction"
-                text="%watch.action.text"
-                description="%watch.action.description"
                 icon="AllIcons.Actions.Restart">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
+
+        <!-- Attached as a left-edge toolbar, the toolbar is then set to SimpleToolWindowPanel.
+             Registered here (rather than created inline in the factory) so they're discoverable from the action search
+             palette and can be assigned keyboard shortcuts by the user. -->
+        <action id="Typst.RecompileFromOutput"
+                class="com.github.pndv.typstrenderer.actions.TypstRecompileFromOutputAction"
+                icon="AllIcons.Actions.Execute"/>
+        <action id="Typst.WatchToggleFromOutput"
+                class="com.github.pndv.typstrenderer.actions.TypstWatchToggleFromOutputAction"
+                icon="AllIcons.Actions.Restart"/>
+        <action id="Typst.ClearOutputConsole"
+                class="com.github.pndv.typstrenderer.actions.TypstClearOutputConsoleAction"
+                icon="AllIcons.Actions.GC"/>
+        <action id="Typst.ScrollOutputToEnd"
+                class="com.github.pndv.typstrenderer.actions.TypstScrollOutputToEndAction"
+                icon="AllIcons.RunConfigurations.Scroll_down"/>
     </actions>
 </idea-plugin>

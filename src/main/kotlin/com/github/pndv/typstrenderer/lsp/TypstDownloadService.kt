@@ -1,5 +1,7 @@
 package com.github.pndv.typstrenderer.lsp
 
+import com.github.pndv.typstrenderer.TYPST_NOTIFICATION_GROUP_ID
+import com.github.pndv.typstrenderer.TypstBundle
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -41,12 +43,12 @@ class TypstDownloadService {
             return
         }
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Downloading Typst CLI", true) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, TypstBundle.message("download.typst.task.title"), true) {
             override fun run(indicator: ProgressIndicator) {
                 isDownloading = true
                 try {
                     indicator.isIndeterminate = false
-                    indicator.text = "Resolving latest Typst release..."
+                    indicator.text = TypstBundle.message("download.typst.resolving")
                     indicator.fraction = 0.0
 
                     val assetName = TinymistManager.getTypstPlatformAssetName()
@@ -58,12 +60,12 @@ class TypstDownloadService {
 
                     val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.typst.baseUrl, assetName)
                     if (downloadUrl == null) {
-                        notifyError(project, "Could not find Typst release for this platform ($assetName)")
+                        notifyError(project, TypstBundle.message("download.typst.notFound", assetName))
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
 
-                    indicator.text = "Downloading Typst CLI..."
+                    indicator.text = TypstBundle.message("download.typst.downloading")
                     indicator.fraction = 0.1
 
                     val manager = TinymistManager.getInstance()
@@ -74,7 +76,7 @@ class TypstDownloadService {
                     // Download the archive
                     downloadFile(downloadUrl, archiveFile, indicator)
 
-                    indicator.text = "Extracting Typst binary..."
+                    indicator.text = TypstBundle.message("download.typst.extracting")
                     indicator.fraction = 0.8
 
                     // Extract the typst binary from the archive
@@ -89,15 +91,15 @@ class TypstDownloadService {
                     }
 
                     indicator.fraction = 1.0
-                    indicator.text = "Typst CLI downloaded successfully"
+                    indicator.text = TypstBundle.message("download.typst.success")
 
                     log.info("Typst CLI downloaded to: ${targetBinary.absolutePath}")
 
                     NotificationGroupManager.getInstance()
-                        .getNotificationGroup("Typst")
+                        .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
                         .createNotification(
-                            "Typst CLI downloaded",
-                            "Typst CLI has been downloaded and is ready to use.",
+                            TypstBundle.message("notification.typst.downloaded.title"),
+                            TypstBundle.message("notification.typst.downloaded.body"),
                             NotificationType.INFORMATION
                         ).notify(project)
 
@@ -108,7 +110,7 @@ class TypstDownloadService {
                         log.info("Typst CLI download cancelled by user")
                     } else {
                         log.warn("Failed to download Typst CLI", e)
-                        notifyError(project, "Download failed: ${e.message}")
+                        notifyError(project, TypstBundle.message("download.typst.failed", e.message ?: ""))
                     }
                     onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                 } finally {
@@ -212,9 +214,9 @@ class TypstDownloadService {
 
     private fun notifyError(project: Project?, message: String) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup("Typst")
+            .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
             .createNotification(
-                "Typst CLI download failed",
+                TypstBundle.message("notification.typst.download.failed.title"),
                 message,
                 NotificationType.ERROR
             ).notify(project)

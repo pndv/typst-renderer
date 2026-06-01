@@ -7,8 +7,8 @@
 ### What the Language Server Protocol Does
 
 ```
-┌──────────────────┐         JSON-RPC (stdio)          ┌──────────────────┐
-│   IDE / Editor   │  ──── LSP Messages ──────────────> │  Language Server  │
+┌──────────────────┐         JSON-RPC (stdio)           ┌──────────────────┐
+│   IDE / Editor   │  ──── LSP Messages ──────────────> │  Language Server │
 │  (IntelliJ IDEA) │ <──── LSP Responses ────────────── │   (tinymist)     │
 └──────────────────┘                                    └──────────────────┘
 ```
@@ -72,7 +72,7 @@ Typst is a relatively new language (alternative to LaTeX). Tinymist is the **off
 │  │                    Plugin: typst-renderer                     │  │
 │  │                                                               │  │
 │  │  ┌─────────────────────────────────────────────────────────┐  │  │
-│  │  │              File Type & Language Layer                  │  │  │
+│  │  │              File Type & Language Layer                 │  │  │
 │  │  │                                                         │  │  │
 │  │  │  TypstLanguage ─── TypstFileType ─── TypstIcons         │  │  │
 │  │  │  (defines "Typst")  (maps .typ)     (file icon)         │  │  │
@@ -80,42 +80,42 @@ Typst is a relatively new language (alternative to LaTeX). Tinymist is the **off
 │  │                          │                                    │  │
 │  │          ┌───────────────┼───────────────┐                    │  │
 │  │          ▼               ▼               ▼                    │  │
-│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐  │  │
-│  │  │  LSP Layer   │ │ Editor Layer │ │  Compilation Layer   │  │  │
-│  │  │              │ │              │ │                      │  │  │
-│  │  │ SupportProv. │ │ SplitEditor  │ │ CompileService       │  │  │
-│  │  │ Descriptor   │ │ Provider     │ │ WatchService         │  │  │
-│  │  │ Manager      │ │  ┌────────┐  │ │ CompileAction        │  │  │
-│  │  │ DownloadSvc  │ │  │Preview │  │ │ WatchAction          │  │  │
-│  │  └──────┬───────┘ │  │FileEd. │  │ └──────────┬───────────┘  │  │
-│  │         │         │  │(JCEF)  │  │            │              │  │
-│  │         │         │  └───┬────┘  │            │              │  │
-│  │         │         └──────┼───────┘            │              │  │
-│  │         │                │                    │              │  │
-│  │  ┌──────────────┐ ┌─────────────┐ ┌───────────────────────┐  │  │
-│  │  │ Settings     │ │ Tool Window │ │ Notifications         │  │  │
-│  │  │ State +      │ │ (Output     │ │ (Balloon alerts)      │  │  │
-│  │  │ Configurable │ │  Console)   │ │                       │  │  │
-│  │  └──────────────┘ └─────────────┘ └───────────────────────┘  │  │
+│  │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐   │  │
+│  │  │  LSP Layer   │ │ Editor Layer │ │  Compilation Layer   │   │  │
+│  │  │              │ │              │ │                      │   │  │
+│  │  │ SupportProv. │ │ SplitEditor  │ │ CompileService       │   │  │
+│  │  │ Descriptor   │ │ Provider     │ │ WatchService         │   │  │
+│  │  │ Manager      │ │  ┌────────┐  │ │ CompileAction        │   │  │
+│  │  │ DownloadSvc  │ │  │Preview │  │ │ WatchAction          │   │  │
+│  │  └──────┬───────┘ │  │FileEd. │  │ └──────────┬───────────┘   │  │
+│  │         │         │  │(JCEF)  │  │            │               │  │
+│  │         │         │  └───┬────┘  │            │               │  │
+│  │         │         └──────┼───────┘            │               │  │
+│  │         │                │                    │               │  │
+│  │  ┌──────────────┐ ┌─────────────┐ ┌───────────────────────┐   │  │
+│  │  │ Settings     │ │ Tool Window │ │ Notifications         │   │  │
+│  │  │ State +      │ │ (Output     │ │ (Balloon alerts)      │   │  │
+│  │  │ Configurable │ │  Console)   │ │                       │   │  │
+│  │  └──────────────┘ └─────────────┘ └───────────────────────┘   │  │
 │  └───────────────────────────────────────────────────────────────┘  │
-│                          │                    │                      │
+│                          │                    │                     │
 └──────────────────────────┼────────────────────┼─────────────────────┘
                            │                    │
-              ┌────────────┼────────────────────┼──────────┐
+              ┌────────────┼────────────────────┼────────────┐
               │     External Processes (subprocess via stdio)│
-              │            │                    │          │
-              │   ┌────────▼─────────┐  ┌──────▼────────┐ │
-              │   │   tinymist lsp   │  │  typst watch  │ │
-              │   │                  │  │  typst compile │ │
-              │   │  Code intel:     │  │                │ │
-              │   │  - completions   │  │  Compiles .typ │ │
-              │   │  - diagnostics   │  │  to .pdf       │ │
-              │   │  - hover docs    │  │                │ │
-              │   │  - go-to-def     │  │  Watch mode:   │ │
-              │   │  - formatting    │  │  auto-recompile│ │
-              │   │                  │  │  on file change│ │
-              │   └──────────────────┘  └───────────────┘ │
-              └────────────────────────────────────────────┘
+              │            │                    │            │
+              │   ┌────────▼─────────┐  ┌──────▼─────────┐   │
+              │   │   tinymist lsp   │  │  typst watch   │   │
+              │   │                  │  │  typst compile │   │
+              │   │  Code intel:     │  │                │   │
+              │   │  - completions   │  │  Compiles .typ │   │
+              │   │  - diagnostics   │  │  to .pdf       │   │
+              │   │  - hover docs    │  │                │   │
+              │   │  - go-to-def     │  │  Watch mode:   │   │
+              │   │  - formatting    │  │  auto-recompile│   │
+              │   │                  │  │  on file change│   │
+              │   └──────────────────┘  └────────────────┘   │
+              └──────────────────────────────────────────────┘
 ```
 
 ---
@@ -175,8 +175,8 @@ src/main/kotlin/com/github/pndv/typstrenderer/
 │   ├── TypstCompileAction.kt               — Compile menu action (Ctrl+Shift+T)
 │   └── TypstWatchAction.kt                 — Watch toggle action
 ├── settings/
-│   ├── TypstSettingsState.kt               — Persistent settings (paths, flags)
-│   └── TypstSettingsConfigurable.kt        — Settings UI (Tools > Typst)
+│   ├── TypstSettingsState.kt                    — Persistent settings (paths, flags)
+│   └── TypstSettingsConfigurable.kt                — Settings UI (Tools > Typst)
 └── toolWindow/
     └── TypstOutputToolWindowFactory.kt     — Output console (bottom panel)
 ```

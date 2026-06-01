@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "packageRules": [
+    {
+      "groupName": "IntelliJ Platform",
+      "schedule": ["before 6am on monday"],
+      "matchPackageNames": [
+        "/^org\\.jetbrains\\.intellij/",
+        "/^com\\.jetbrains\\.intellij/"
+      ]
+    },
+    {
+      "matchUpdateTypes": ["patch"],
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^gradle/libs\\.versions\\.toml$/"
+      ],
+      "matchStrings": ["pdfjs = \"(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "mozilla/pdf.js",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ]
+}

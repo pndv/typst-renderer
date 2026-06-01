@@ -2,7 +2,6 @@
 # https://www.jetbrains.com/help/qodana/qodana-yaml.html
 
 version: "1.0"
-linter: jetbrains/qodana-jvm-community:2024.3
 projectJDK: "21"
 profile:
   name: qodana.recommended
@@ -10,3 +9,5 @@ exclude:
   - name: All
     paths:
       - .qodana
+      - src/main/resources/pdfjs
+      - src/main/resources/pdfjs-bridge.js
