@@ -4,6 +4,58 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-10
+
+The plugin now compiles entirely through the bundled **tinymist** language server — the standalone `typst`
+command-line binary is no longer invoked. This release *stops using* the typst CLI; the CLI-backed code remains
+in the tree, unwired, as a revert hatch and will be removed in a later release.
+
+### Added
+
+- Per-project **export directory** setting (`typstExportPath`, default `target`) on the project-scoped settings page.
+  The plugin wraps it as tinymist's `$root/<dir>/$dir/$name` output template, so the source tree is mirrored under the
+  chosen directory and every file keeps a unique output path.
+- `TinymistCommands` — a typed wrapper over tinymist's `workspace/executeCommand` surface (`tinymist.exportPdf`,
+  `tinymist.pinMain`, `tinymist.getServerInfo`), with a structured `ExportPdfResult` (`Exported` / `Failed` /
+  `Unavailable`) that carries tinymist's formatted compile diagnostic instead of scraping stderr.
+
+### Changed
+
+- **Manual Compile** now triggers a tinymist `tinymist.exportPdf` export rather than spawning a `typst compile`
+  subprocess. The PDF is written to the configured export directory and the path is taken from tinymist's response.
+- **PDF preview** now drives compilation itself: opening a preview, or saving the previewed file, runs a debounced
+  `tinymist.exportPdf` and reloads the panel from the returned path — there is no `typst watch` subprocess. A successful
+  render hot-swaps the PDF in place (preserving scroll); the panel falls back to a full reload only when the viewer page
+  is not currently shown.
+- Preview startup is gated on the language server being ready: while tinymist is still starting, the panel shows a
+  waiting page and polls for readiness rather than reporting spurious "no PDF returned" errors. Transient export
+  failures while the server is up are retried briefly before surfacing a hard error.
+- The compile diagnostic shown in the **Typst Output** console is now tinymist's own formatted `error: …` text
+  (multi-line, with file-location links preserved), replacing the previous stderr parsing.
+- The tinymist binary is pinned to **v0.14.18** as the download target, which includes the workspace-root output-path
+  fix required for the default export layout.
+
+### Removed
+
+- The explicit **Watch** action — both the editor right-click "Watch Typst File" entry and the Watch toggle on the Typst
+  Output toolbar. An open preview now recompiles automatically on every save and so serves as the live watch; the
+  standalone "watch and write to the project without an open preview" workflow is dropped for the time being.
+- The **typst CLI settings UI** — the "Compilation (Typst CLI)" group (binary-path field, "Download typst" button,
+  status row, and auto-compile-on-save checkbox) has been removed from the Typst settings page, since compilation now
+  goes through tinymist. The underlying settings keys and download service are retained internally for now.
+
+### Tests
+
+- `TinymistCommandsTest` — covers the export-path extraction, error formatting, and Rust-debug unescaping helpers.
+- `TypstFilePreviewerDecisionsTest` — covers the preview pipeline's readiness-poll, transient-retry, and
+  hot-swap-vs-full-navigation decisions, plus the `ExportPdfResult` contract.
+- `TinymistLspServerDescriptorTest` — covers the export-directory → output-path template construction.
+
+### Infrastructure
+
+- PDF.js held at the 4.10.x line with a Renovate `<5.0.0` ceiling and a build-gate assertion, so an automated bump can't
+  silently move past what the bundled JCEF Chromium supports.
+
 ## [0.3.0] - 2026-05-27
 
 ### Added

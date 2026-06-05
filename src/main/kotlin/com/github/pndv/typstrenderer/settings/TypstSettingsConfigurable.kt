@@ -3,7 +3,6 @@ package com.github.pndv.typstrenderer.settings
 import com.github.pndv.typstrenderer.TypstBundle.message
 import com.github.pndv.typstrenderer.lsp.TinymistDownloadService
 import com.github.pndv.typstrenderer.lsp.TinymistManager
-import com.github.pndv.typstrenderer.lsp.TypstDownloadService
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.ui.DialogPanel
@@ -17,7 +16,7 @@ class TypstSettingsConfigurable : Configurable {
 
     private val settings = TypstSettingsState.getInstance()
     private var tinymistStatusLabel: JBLabel? = null
-    private var typstStatusLabel: JBLabel? = null
+
     private var settingsPanel: DialogPanel? = null
 
     override fun getDisplayName(): String = message("settings.displayName")
@@ -29,50 +28,23 @@ class TypstSettingsConfigurable : Configurable {
             }
             row(message("settings.lsp.path.label")) {
                 textFieldWithBrowseButton(
-                    FileChooserDescriptorFactory.singleFile()
-                        .withTitle(message("settings.lsp.path.text"))
-                ).bindText(settings::tinymistPath)
-                    .comment(message("settings.lsp.path.comment"))
+                    FileChooserDescriptorFactory.singleFile().withTitle(message("settings.lsp.path.text"))
+                ).bindText(settings::tinymistPath).comment(message("settings.lsp.path.comment"))
             }
             row {
                 button(message("settings.lsp.download.label")) {
                     tinymistStatusLabel?.text = message("settings.lsp.download.text")
                     TinymistDownloadService.getInstance().downloadInBackground(null) { success ->
-                        tinymistStatusLabel?.text = if (success) getTinymistStatusText() else message("settings.lsp.download.failed.text")
+                        tinymistStatusLabel?.text =
+                            if (success) getTinymistStatusText() else message("settings.lsp.download.failed.text")
                     }
                 }.comment(message("settings.lsp.download.comment"))
             }
         }
 
-        group(message("settings.compiler.group.label")) {
-            row(message("settings.compiler.status.text")) {
-                typstStatusLabel = JBLabel(getTypstStatusText()).also { cell(it) }
-            }
-            row(message("settings.compiler.path.label")) {
-                textFieldWithBrowseButton(
-                    FileChooserDescriptorFactory.singleFile().withTitle(message("settings.compiler.path.select.text"))
-                ).comment(message("settings.compiler.path.comment"))
-                    .bindText(settings::typstPath)
-            }
-            row {
-                button(message("settings.compiler.download.button.label")) {
-                    typstStatusLabel?.text = message("settings.compiler.download.text")
-                    TypstDownloadService.getInstance().downloadInBackground(null) {
-                        success ->
-                        typstStatusLabel?.text = if (success) getTypstStatusText() else message("settings.compiler.download.failed.text")
-                    }
-                }.comment(message("settings.compiler.download.comment"))
-            }
-            row {
-                checkBox(message("settings.compiler.checkbox.autoCompile"))
-                    .bindSelected(settings::autoCompileOnSave)
-            }
-        }
-
         group(message("settings.preview.group.label")) {
             row {
-                checkBox(message("settings.preview.checkbox.label"))
-                    .comment(message("settings.preview.checkbox.comment"))
+                checkBox(message("settings.preview.checkbox.label")).comment(message("settings.preview.checkbox.comment"))
                     .bindSelected(settings::rememberPreviewScrollAcrossRestart)
             }
         }
@@ -81,16 +53,13 @@ class TypstSettingsConfigurable : Configurable {
     override fun isModified(): Boolean = settingsPanel?.isModified() == true
 
     override fun apply() {
-        settingsPanel?.apply()
-        // Refresh status labels after applying new paths
+        settingsPanel?.apply() // Refresh status labels after applying new paths
         tinymistStatusLabel?.text = getTinymistStatusText()
-        typstStatusLabel?.text = getTypstStatusText()
     }
 
     override fun reset() {
         settingsPanel?.reset()
         tinymistStatusLabel?.text = getTinymistStatusText()
-        typstStatusLabel?.text = getTypstStatusText()
     }
 
     private fun getTinymistStatusText(): String {
@@ -100,16 +69,6 @@ class TypstSettingsConfigurable : Configurable {
             message("settings.lsp.binary.found.text", resolvedPath)
         } else {
             message("settings.lsp.binary.notFound.text")
-        }
-    }
-
-    private fun getTypstStatusText(): String {
-        val manager = TinymistManager.getInstance()
-        val resolvedPath = manager.resolveTypstPath()
-        return if (resolvedPath != null) {
-            message("settings.compiler.binary.found.text", resolvedPath)
-        } else {
-            message("settings.compiler.binary.notFound.text")
         }
     }
 }

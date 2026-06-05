@@ -1,10 +1,6 @@
 package com.github.pndv.typstrenderer.settings
 
-import com.intellij.openapi.components.PersistentStateComponent
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.State
-import com.intellij.openapi.components.Storage
-import com.intellij.openapi.components.service
+import com.intellij.openapi.components.*
 import com.intellij.openapi.project.Project
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 
@@ -27,6 +23,11 @@ class TypstProjectSettingsState : PersistentStateComponent<TypstProjectSettingsS
 
         // The `--font-path` argument to `typst` cli/tinymist.
         var typstFontPath: String = "",
+
+        // Directory, relative to the project root, where tinymist writes exported
+        // PDFs; the source folder structure is mirrored beneath it. Feeds the
+        // `outputPath` template sent to tinymist (see TinymistLspServerDescriptor).
+        var typstExportPath: String = DEFAULT_EXPORT_PATH,
     )
 
     private var state = State()
@@ -39,6 +40,12 @@ class TypstProjectSettingsState : PersistentStateComponent<TypstProjectSettingsS
         get() = state.typstFontPath
         set(value) { state.typstFontPath = value }
 
+    var typstExportPath: String
+        get() = state.typstExportPath
+        set(value) {
+            state.typstExportPath = value
+        }
+
     override fun getState(): State = state
 
     override fun loadState(state: State) {
@@ -50,6 +57,9 @@ class TypstProjectSettingsState : PersistentStateComponent<TypstProjectSettingsS
     }
 
     companion object {
+        /** Default export directory, relative to the project root. */
+        const val DEFAULT_EXPORT_PATH = "target"
+
         fun getInstance(project: Project): TypstProjectSettingsState = project.service()
     }
 }

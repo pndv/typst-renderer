@@ -179,6 +179,7 @@ tasks {
     val pdfjsOutDir = layout.projectDirectory.dir("src/main/resources/pdfjs")
 
     register("downloadPdfJs") {
+        group = "build"
         description = "Download and vendor PDF.js $pdfjsVersion into src/main/resources/pdfjs."
         // Capture file references outside doLast to avoid accessing `project` from the
         // task action (which would break Gradle's configuration cache).
@@ -233,6 +234,36 @@ tasks {
             marker.writeText(pdfjsVersion)
             logger.lifecycle("PDF.js vendored to ${outDirFile.absolutePath}")
         }
+    }
+
+    // Guards against silent drift: a Renovate bump of the `pdfjs` pin updates
+    // libs.versions.toml but does NOT re-run downloadPdfJs, so the committed
+    // assets can lag the pin (or, worse, get re-vendored to a version the bundled
+    // JCEF cannot run). This check fails the build until the two are reconciled.
+    val verifyPdfjsVendored = register("verifyPdfjsVendored") {
+        group = "verification"
+        description = "Fails if vendored PDF.js assets are out of sync with the `pdfjs` pin in libs.versions.toml."
+        val marker = pdfjsOutDir.file(".version").asFile
+        val expected = pdfjsVersion // A verification gate should always run, never be skipped as up-to-date.
+        outputs.upToDateWhen { false }
+        doLast {
+            if (!marker.exists()) {
+                throw GradleException(
+                    "PDF.js assets are not vendored: ${marker.path} is missing. " + "Run `./gradlew downloadPdfJs` and commit src/main/resources/pdfjs.",
+                )
+            }
+            val actual = marker.readText().trim()
+            if (actual != expected) {
+                throw GradleException(
+                    "Vendored PDF.js ($actual) is out of sync with the `pdfjs` pin ($expected) in " + "gradle/libs.versions.toml. Run `./gradlew downloadPdfJs` and commit " + "src/main/resources/pdfjs (mind the JCEF/Chromium ceiling noted next to the pin).",
+                )
+            }
+            logger.lifecycle("PDF.js vendored assets match the pin ($expected).")
+        }
+    }
+
+    named("check") {
+        dependsOn(verifyPdfjsVendored)
     }
 }
 
