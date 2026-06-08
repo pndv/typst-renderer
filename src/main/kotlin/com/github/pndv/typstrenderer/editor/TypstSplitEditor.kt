@@ -1,5 +1,6 @@
 package com.github.pndv.typstrenderer.editor
 
+import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.theme.TypstThemeListener
 import com.github.pndv.typstrenderer.theme.TypstThemeService
 import com.intellij.openapi.application.ApplicationManager
@@ -16,13 +17,12 @@ class TypstSplitEditor(
     textEditor: TextEditor,
     previewEditor: TypstFilePreviewer,
 ) : TextEditorWithPreview(
-    textEditor,
-    previewEditor,
-    "Typst Editor",
+    textEditor, previewEditor, TypstBundle.message("editor.split.window.name"),
     Layout.SHOW_EDITOR_AND_PREVIEW
 ) {
 
-    init {
+    init { // Instantiate the app service so its init subscribes to LaF/editor events and republishes them on TOPIC.
+        TypstThemeService.getInstance()
         ApplicationManager.getApplication().messageBus
             .connect(this)
             .subscribe(TypstThemeService.TOPIC, TypstThemeListener { _ ->
