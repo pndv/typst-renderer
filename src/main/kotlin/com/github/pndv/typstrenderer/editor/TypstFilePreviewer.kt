@@ -16,7 +16,7 @@ import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorState
 import com.intellij.openapi.fileEditor.FileEditorStateLevel
@@ -30,12 +30,15 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.ui.ColorUtil
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.io.BaseOutputReader
+import com.intellij.util.ui.NamedColorUtil
+import com.intellij.util.ui.UIUtil
 import org.cef.CefSettings
 import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
@@ -70,7 +73,13 @@ class TypstFilePreviewer(
     private val reloadExecutor = AppExecutorUtil.createBoundedScheduledExecutorService("TypstPdfReload", 1)
     private var reloadJob: ScheduledFuture<*>? = null
 
-    private val isDark get() = EditorColorsManager.getInstance().isDarkEditor
+    private val colourScheme get() = if (ColorUtil.isDark(UIUtil.getPanelBackground())) "dark" else "light"
+    internal fun getBgColour() = ColorUtil.toHtmlColor(UIUtil.getPanelBackground())
+    internal fun getFgColour() = ColorUtil.toHtmlColor(UIUtil.getLabelForeground())
+    internal fun getFgSubColour() = ColorUtil.toHtmlColor(UIUtil.getContextHelpForeground())
+    internal fun getErrorFgColour() = ColorUtil.toHtmlColor(NamedColorUtil.getErrorForeground())
+    internal fun getFontFamilyString() = "'${UIUtil.getLabelFont().family}', sans-serif"
+    internal fun getLabelFontSize() = UIUtil.getLabelFont().size
 
     /**
      * Last viewport reported by the in-page PDF.js bridge (see `pdfjs-bridge.js`).
@@ -167,12 +176,9 @@ class TypstFilePreviewer(
             ) {
                 val url = frame.url.orEmpty()
                 log.info("[pdfjs] onLoadEnd status=$httpStatusCode url=$url isMain=${frame.isMain}")
-                if (isDark) {
-                    b.executeJavaScript(
-                        "document.documentElement.style.colorScheme='dark';",
-                        url, 0
-                    )
-                }
+                b.executeJavaScript(
+                    "document.documentElement.style.colorScheme='$colourScheme';", url, 0
+                )
                 if (frame.isMain && url.startsWith(PdfjsEndpoints.viewerUrl())) {
                     b.executeJavaScript(bridgeJs, url, 0)
                     // If a viewport was persisted from a previous session, push it to
@@ -236,19 +242,33 @@ class TypstFilePreviewer(
         )
     }
 
-    /** Reloads the browser content with updated theme colours whenever the IDE theme changes. */
-    private fun listenForThemeChanges() {
+    /** Re-applies theme colours to the preview in-place whenever the IDE theme changes (no reload). */
+    private fun listenForThemeChanges() { // Instantiate the app service so its init subscribes to LaF/editor events and republishes them on TOPIC.
+        TypstThemeService.getInstance()
         ApplicationManager.getApplication().messageBus
             .connect(this)
             .subscribe(TypstThemeService.TOPIC, TypstThemeListener { _ ->
                 ApplicationManager.getApplication().invokeLater {
                     val cef = browser?.cefBrowser ?: return@invokeLater
+                    log.debug("[theme] re-applying preview colours (scheme=$colourScheme)")
                     // Theme changes only tweak CSS in-page — no reload, so scroll is preserved.
-                    val colorScheme = if (isDark) "dark" else "light"
                     cef.executeJavaScript(
-                        "document.documentElement.style.colorScheme='$colorScheme';",
+                        "document.documentElement.style.colorScheme='$colourScheme';",
                         cef.url, 0
-                    )
+                    ) // Recolour a splash/error page if one is showing. The id lookup is a no-op on
+                    // the PDF.js viewer (no such element), so the PDF itself is left untouched.
+                    val recolourJs = """
+                        (function() {
+                            var body = document.getElementById('typst-splash');
+                            if (!body) return;
+                            body.style.background = '${getBgColour()}';
+                            body.style.color =
+                                body.dataset.kind === 'error' ? '${getErrorFgColour()}' : '${getFgColour()}';
+                            var sub = document.getElementById('typst-splash-sub');
+                            if (sub) sub.style.color = '${getFgSubColour()}';
+                        })();
+                    """.trimIndent()
+                    cef.executeJavaScript(recolourJs, cef.url, 0)
                 }
             })
     }
@@ -257,7 +277,7 @@ class TypstFilePreviewer(
 
     override fun getComponent(): JComponent = browser?.component ?: fallbackLabel
     override fun getPreferredFocusedComponent(): JComponent? = browser?.component
-    override fun getName(): String = "Typst Preview"
+    override fun getName(): String = TypstBundle.message("previewer.window.name")
     override fun isModified(): Boolean = false
     override fun isValid(): Boolean = file.isValid
 
@@ -456,19 +476,27 @@ class TypstFilePreviewer(
         message: String = TypstBundle.message("previewer.waiting.compiling"),
         detail: String = TypstBundle.message("previewer.waiting.detail")
     ): String {
-        val (bg, fg, fgSub) = if (isDark) Triple("#2b2b2b", "#aaaaaa", "#777777")
-        else Triple("#f5f5f5", "#555555", "#888888")
-        return """
+        val (bg, fg, fgSub) = Triple(getBgColour(), getFgColour(), getFgSubColour())
+        val html = """
             <html>
-            <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;
-                         font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:$fg;background:$bg;">
+            <body id="typst-splash" 
+                  data-kind="waiting"
+                  style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;
+                         font-family:${getFontFamilyString()};
+                         font-size:${getLabelFontSize()}px;
+                         color:$fg;
+                         background:$bg;">
                 <div style="text-align:center;">
-                    <p style="font-size:16px;">$message</p>
-                    <p style="font-size:13px;color:$fgSub;">$detail</p>
+                    <p style="font-size:1.2em;">$message</p>
+                    <p id="typst-splash-sub" style="font-size:0.9em;color:$fgSub;">$detail</p>
                 </div>
             </body>
             </html>
         """.trimIndent()
+
+        log.trace { "[waitingHtml]:\n$html" }
+
+        return html
     }
 
     /**
@@ -480,18 +508,28 @@ class TypstFilePreviewer(
      * template, so the bundle's tags survive while uncontrolled input is safe.
      */
     private fun errorHtml(message: String): String {
-        val (bg, fgSub) = if (isDark) Pair("#2b2b2b", "#aaaaaa")
-        else Pair("#f5f5f5", "#666666")
-        return """
+        val (bg, fgSub) = Pair(getBgColour(), getFgSubColour())
+        val html = """
             <html>
-            <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;
-                         font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#cc4444;background:$bg;">
-                <div style="text-align:center;max-width:500px;padding:20px;">
-                    <p style="font-size:16px;font-weight:bold;">${TypstBundle.message("previewer.error.title")}</p>
-                    <p style="font-size:13px;color:$fgSub;">$message</p>
-                </div>
-            </body>
+                <body id="typst-splash" 
+                      data-kind="error"
+                      style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;
+                             font-family:${getFontFamilyString()};
+                             font-size:${getLabelFontSize()}px;
+                             color:${getErrorFgColour()};
+                             background:$bg;">
+                    <div style="text-align:center;
+                         max-width:500px;
+                         padding:20px;">
+                        <p style="font-size:1.2em;font-weight:bold;">${TypstBundle.message("previewer.error.title")}</p>
+                        <p id="typst-splash-sub" style="font-size:0.9em;color:$fgSub;">$message</p>
+                    </div>
+                </body>
             </html>
         """.trimIndent()
+
+        log.trace { "[errorHtml]:\n$html" }
+
+        return html
     }
 }
