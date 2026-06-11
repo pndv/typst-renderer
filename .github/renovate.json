@@ -14,6 +14,13 @@
     {
       "matchUpdateTypes": ["patch"],
       "automerge": false
+    },
+    {
+      "description": "Hold PDF.js on the 4.x line: 5.x and 6.x adopt Uint8Array.toHex/toBase64 and Map.prototype.getOrInsertComputed, which the bundled JCEF (Chromium 137) does not ship — the PDF preview breaks with 'toHex is not a function'. Raise this ceiling only once the JetBrains Runtime ships Chromium >= 140, and re-run `./gradlew downloadPdfJs` when bumping.",
+      "matchPackageNames": [
+        "mozilla/pdf.js"
+      ],
+      "allowedVersions": "<5.0.0"
     }
   ],
   "customManagers": [

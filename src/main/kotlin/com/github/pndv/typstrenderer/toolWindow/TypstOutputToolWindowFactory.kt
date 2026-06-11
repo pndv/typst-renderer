@@ -36,14 +36,14 @@ class TypstOutputToolWindowFactory : ToolWindowFactory {
         // Toolbar Actions Layout: vertical strip down the left edge of the
         // tool window, matching the native convention used by Run / Debug / Build / Terminal.
         //
-        // Order: [Recompile] [Watch] | [Clear] [Scroll-to-end]
+        // Order: [Recompile] | [Clear] [Scroll-to-end]
         //
-        // All four actions are registered in plugin.xml (so their text / description come
+        // All three actions are registered in plugin.xml (so their text / description come
         // from TypstBundle and are localisable, and they're discoverable from the action
         // search palette + assignable to keyboard shortcuts) and pulled by ID here.
         //
-        // Recompile / Watch resolve their target file via TypstLastCompiledTracker so they
-        // work even when the user has the tool window focused with no .typ editor active.
+        // Recompile resolves its target file via TypstLastCompiledTracker so it
+        // works even when the user has the tool window focused with no .typ editor active.
         //
         // Clear / Scroll-to-end resolve their target console via LangDataKeys.CONSOLE_VIEW,
         // which ConsoleViewImpl.uiDataSnapshot populates automatically — combined with
@@ -51,7 +51,6 @@ class TypstOutputToolWindowFactory : ToolWindowFactory {
         val actionManager = ActionManager.getInstance()
         val actionGroup = DefaultActionGroup().apply {
             actionManager.getAction("Typst.RecompileFromOutput")?.let { add(it) }
-            actionManager.getAction("Typst.WatchToggleFromOutput")?.let { add(it) }
             addSeparator()
             actionManager.getAction("Typst.ClearOutputConsole")?.let { add(it) }
             actionManager.getAction("Typst.ScrollOutputToEnd")?.let { add(it) }

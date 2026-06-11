@@ -18,11 +18,12 @@ import javax.swing.JComponent
 /**
  * Project-scoped settings page (Settings > Tools > Typst > Project Overrides).
  *
- * Surfaces the two per-project overrides held in [TypstProjectSettingsState]:
+ * Surfaces the per-project overrides held in [TypstProjectSettingsState]:
  *   - `typstProjectRoot` → `--root` (typst CLI) / process cwd (tinymist LSP)
  *   - `typstFontPath`    → `--font-path` (both typst CLI and tinymist LSP)
+ *   - `typstExportPath`  → tinymist `outputPath` template (export directory)
  *
- * Both are bound at process-spawn time, so applying a change here restarts
+ * All are bound at process-spawn or LSP-init time, so applying a change here restarts
  * the tinymist LSP for this project — otherwise the running server keeps the
  * stale argv, and completions / diagnostics drift out of sync with the
  * rendered output. Manual compile/watch invocations always read the current
@@ -35,6 +36,7 @@ class TypstProjectSettingsConfigurable(private val project: Project) : Configura
     private var settingsPanel: DialogPanel? = null
     private var rootBeforeApply: String = settings.typstProjectRoot
     private var fontPathBeforeApply: String = settings.typstFontPath
+    private var exportPathBeforeApply: String = settings.typstExportPath
 
     override fun getDisplayName(): String = message("settings.project.displayName")
 
@@ -54,11 +56,16 @@ class TypstProjectSettingsConfigurable(private val project: Project) : Configura
                 ).bindText(settings::typstFontPath)
                     .comment(message("settings.project.fontPath.comment"))
             }
+            row(message("settings.project.exportPath.label")) { // Plain text field, not a folder picker: the value is a directory
+                // *relative* to the project root, not an absolute filesystem path.
+                textField().bindText(settings::typstExportPath).comment(message("settings.project.exportPath.comment"))
+            }
         }
     }.also {
         settingsPanel = it
         rootBeforeApply = settings.typstProjectRoot
         fontPathBeforeApply = settings.typstFontPath
+        exportPathBeforeApply = settings.typstExportPath
     }
 
     override fun isModified(): Boolean = settingsPanel?.isModified() == true
@@ -68,9 +75,10 @@ class TypstProjectSettingsConfigurable(private val project: Project) : Configura
 
         val rootChanged = settings.typstProjectRoot != rootBeforeApply
         val fontPathChanged = settings.typstFontPath != fontPathBeforeApply
-        if (rootChanged || fontPathChanged) {
-            // tinymist reads --font-path and its working directory at process
-            // spawn — bounce the server so the new argv takes effect.
+        val exportPathChanged = settings.typstExportPath != exportPathBeforeApply
+        if (rootChanged || fontPathChanged || exportPathChanged) { // tinymist reads --font-path and its working directory at process spawn,
+            // and the outputPath template at LSP init — bounce the server so the new
+            // argv and initializationOptions take effect.
             val lspServerManager = LspServerManager.getInstance(project)
             ApplicationManager.getApplication().executeOnPooledThread {
                 log.debug {"Settings changed. Restarting LSP server for project ${project.name}"}
@@ -90,6 +98,7 @@ class TypstProjectSettingsConfigurable(private val project: Project) : Configura
                     // the user's intent was the application of the last change.
                     rootBeforeApply = settings.typstProjectRoot
                     fontPathBeforeApply = settings.typstFontPath
+                    exportPathBeforeApply = settings.typstExportPath
                 }
             }
         } else {
@@ -97,6 +106,7 @@ class TypstProjectSettingsConfigurable(private val project: Project) : Configura
             // Apply() compares against the current values, not stale ones.
             rootBeforeApply = settings.typstProjectRoot
             fontPathBeforeApply = settings.typstFontPath
+            exportPathBeforeApply = settings.typstExportPath
         }
     }
 
@@ -104,5 +114,6 @@ class TypstProjectSettingsConfigurable(private val project: Project) : Configura
         settingsPanel?.reset()
         rootBeforeApply = settings.typstProjectRoot
         fontPathBeforeApply = settings.typstFontPath
+        exportPathBeforeApply = settings.typstExportPath
     }
 }

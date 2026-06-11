@@ -1,11 +1,9 @@
 package com.github.pndv.typstrenderer.toolWindow
 
+import com.github.pndv.typstrenderer.lsp.TinymistCommands
 import com.intellij.openapi.util.SystemInfo
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
@@ -214,6 +212,49 @@ class TypstConsoleFilterTest {
     fun emptyLine_producesNoMatch() {
         val match = analyseLine("")
         assertNull(match)
+    }
+
+    // ----- Regression: a real tinymist `exportPdf` error must end up linkable -----
+    //
+    // These guard the formatter↔filter seam end-to-end. tinymist returns a failed
+    // export as a single string with the typst diagnostic Rust-Debug-escaped inside
+    // quotes. TinymistCommands.formatExportError lifts and unescapes it; the result
+    // must split into lines whose `┌─` anchor TypstConsoleFilter can hyperlink. If
+    // either the unescaping or the regex regresses, the link silently disappears —
+    // exactly the bug these lock down.
+
+    @Test
+    fun tinymistExportError_afterFormatting_linksTheAnchorLineToItsSourceFile() { // The payload as tinymist Debug-escapes it: literal \n line breaks, doubled
+        // \\ path separators, \u{..} for the Devanagari source excerpt. Built from raw
+        // segments (literal backslashes) and wrapped in real quotes so the formatter's
+        // quote-extraction has a pair to find.
+        val debugPayload =
+            """error: label `<ch:cases>` occurs multiple times in the document\n""" + """  ┌─ d:\\Projects\\ru-hi\\chapters\\intro\\spelling-rules.typ:6:59\n""" + """  │\n6 │ स\u{94d}मरित\n  │     ^^^^^^^^^\n\n"""
+        val rawExportError =
+            """crates\tinymist\src\task\export.rs:579:17: ExportTask(0): document is not available for export: """ + "\"" + debugPayload + "\""
+
+        val formatted = TinymistCommands.formatExportError(rawExportError)
+        val lines = formatted.lines()
+
+        // Exactly one line is a diagnostic anchor — the ┌─ location. The leading
+        // `error:` line and the `6 │ …` source excerpt must not hyperlink.
+        val matches = lines.mapNotNull { analyseLine(it) }
+        assertEquals("Only the ┌─ anchor line should hyperlink", 1, matches.size)
+
+        val match = matches.single()
+        assertEquals("""d:\Projects\ru-hi\chapters\intro\spelling-rules.typ""", match.path)
+        assertEquals(6, match.lineNumber)
+        assertEquals(59, match.column)
+    }
+
+    @Test
+    fun tinymistExportError_devanagariExcerpt_decodesToGlyphsNotEscapeSequences() { // The \u{94d} (Devanagari virama) in the excerpt must render as the real
+        // combining mark, not leak through as a literal "\u{94d}" in the console.
+        val raw = """x: """ + "\"" + """line one\n6 │ स\u{94d}मरित""" + "\""
+        val formatted = TinymistCommands.formatExportError(raw)
+
+        assertTrue("unicode escape must decode to the glyph: $formatted", formatted.contains("स्मरित"))
+        assertTrue("no literal \\u{ escape may survive: $formatted", !formatted.contains("""\u{"""))
     }
 
     // ----- computeAbsolutePath: path resolution rules -----

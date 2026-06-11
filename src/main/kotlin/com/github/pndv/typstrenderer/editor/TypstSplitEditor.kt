@@ -17,8 +17,7 @@ class TypstSplitEditor(
     textEditor: TextEditor,
     previewEditor: TypstFilePreviewer,
 ) : TextEditorWithPreview(
-    textEditor, previewEditor, TypstBundle.message("editor.split.window.name"),
-    Layout.SHOW_EDITOR_AND_PREVIEW
+    textEditor, previewEditor, TypstBundle.message("editor.split.window.name"), Layout.SHOW_EDITOR_AND_PREVIEW
 ) {
 
     init { // Instantiate the app service so its init subscribes to LaF/editor events and republishes them on TOPIC.

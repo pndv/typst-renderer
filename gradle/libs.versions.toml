@@ -1,6 +1,11 @@
 [versions]
 # Vendored assets (not a Maven dep — consumed by the `downloadPdfJs` Gradle task).
-pdfjs = "6.0.227"
+# Held at 4.10.x: the 5.x and 6.x lines adopt Uint8Array.toHex/toBase64 and
+# Map.prototype.getOrInsertComputed, which the bundled JCEF (Chromium 137) does not
+# ship — the preview fails with "toHex is not a function". Bumping this pin REQUIRES
+# re-running `./gradlew downloadPdfJs` to materialise the assets, and only once the
+# JetBrains Runtime ships Chromium >= 140.
+pdfjs = "4.10.38"
 # libraries
 junit4 = "4.13.2"
 mockwebserver = "5.3.2"
