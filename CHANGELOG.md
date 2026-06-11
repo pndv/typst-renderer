@@ -225,7 +225,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.0...HEAD
+[0.4.0]: https://github.com/pndv/typst-renderer/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/pndv/typst-renderer/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/pndv/typst-renderer/compare/0.1.2...0.2.0
 [0.1.2]: https://github.com/pndv/typst-renderer/compare/0.1.1...0.1.2
