@@ -12,11 +12,15 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.platform.ide.progress.runWithModalProgressBlocking
 import com.intellij.platform.lsp.api.LspServer
 import com.intellij.platform.lsp.api.LspServerManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.refactoring.rename.RenameHandler
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.eclipse.lsp4j.*
 import java.net.URI
 import java.nio.file.Paths
@@ -60,14 +64,30 @@ class TypstLspRenameHandler : RenameHandler {
         val position = offsetToLspPosition(editor.document, offset)
         val textDocId = TextDocumentIdentifier(virtualFile.url.toLspUri())
 
-        // Step 1: prepareRename — validate that rename is possible here and get current name
+        // Step 1: prepareRename — validate that rename is possible here and get current name.
+        // The LSP round-trip runs off the EDT on Dispatchers.IO under a cancellable modal
+        // progress, so a slow or busy tinymist can't freeze the UI. runWithModalProgressBlocking
+        // is the modern replacement for ProgressManager.runProcessWithProgressSynchronously.
         val prepareParams = PrepareRenameParams(textDocId, position)
         val prepareResult = try {
-            server.sendRequestSync(5000) { ls ->
-                ls.textDocumentService.prepareRename(prepareParams)
+            runWithModalProgressBlocking(project, "Preparing rename…") {
+                withContext(Dispatchers.IO) {
+                    server.sendRequestSync(5000) { ls ->
+                        ls.textDocumentService.prepareRename(prepareParams)
+                    }
+                }
             }
+        } catch (_: CancellationException) { // The user cancelled the modal progress. Swallowing (rather than rethrowing) the
+            // CancellationException is correct here because this is a top-level, user-initiated
+            // EDT action — there is no enclosing coroutine or platform operation whose
+            // structured cancellation we would be breaking by not propagating it. Cancelling
+            // simply means "abort this rename", so we return quietly. It must be caught *before*
+            // the generic Exception branch: ProcessCanceledException is a CancellationException
+            // subtype, so without this branch a cancel would fall through and be misreported.
+            LOG.debug("Rename cancelled while preparing")
+            return
         } catch (e: Exception) {
-            LOG.info("prepareRename failed or not supported: ${e.message}")
+            LOG.warn("prepareRename failed or not supported: ${e.message}")
             null
         }
 
@@ -91,12 +111,22 @@ class TypstLspRenameHandler : RenameHandler {
 
         if (newName.isNullOrBlank() || newName == currentName) return
 
-        // Step 3: Send rename request
+        // Step 3: Send rename request — same off-EDT cancellable modal treatment as prepareRename.
         val renameParams = RenameParams(textDocId, position, newName)
         val workspaceEdit = try {
-            server.sendRequestSync(10000) { ls ->
-                ls.textDocumentService.rename(renameParams)
+            runWithModalProgressBlocking(project, "Renaming…") {
+                withContext(Dispatchers.IO) {
+                    server.sendRequestSync(10000) { ls ->
+                        ls.textDocumentService.rename(renameParams)
+                    }
+                }
             }
+        } catch (_: CancellationException) { // User cancelled the modal progress mid-rename — abort quietly. The same rationale as the
+            // prepareRename branch above: no enclosing coroutine/operation to propagate to, and
+            // catching it before the generic Exception branch keeps a cancel (a CancellationException,
+            // which ProcessCanceledException extends) from being surfaced as a "Rename failed" error.
+            LOG.debug("Rename cancelled while applying edits")
+            return
         } catch (e: Exception) {
             LOG.warn("Rename request failed", e)
             Messages.showErrorDialog(project, "Rename failed: ${e.message}", "Rename Error")

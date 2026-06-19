@@ -21,13 +21,19 @@ class TypstOutputToolWindowFactory : ToolWindowFactory {
         val console = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
 
         // Hyperlink typst error / warning locations (path:line:col) into the
-        // editor. All three output paths — TypstCompileService, TypstWatchService,
-        // TypstFilePreviewer — write into this shared console, so a single filter
-        // registration covers every code path that emits typst diagnostics.
+        // editor. Both output paths — TypstCompileService and TypstFilePreviewer —
+        // write into this shared console, so a single filter registration covers
+        // every code path that emits typst diagnostics.
         console.addMessageFilter(TypstConsoleFilter(project))
 
         val consoleHolder = project.service<TypstConsoleHolder>()
         consoleHolder.console = console
+
+        // Drain any output that was produced before the tool window existed (e.g. a compile
+        // that finished while the console was still null). printToConsole buffers those
+        // messages in the holder; now that the console is live, flush them in order so the
+        // first compile's diagnostics aren't lost on a freshly-opened project.
+        consoleHolder.printBufferToConsole()
 
         // Clear the consoleHolder's console reference when the console is disposed
         val disposableConsole = Disposable { consoleHolder.console = null }

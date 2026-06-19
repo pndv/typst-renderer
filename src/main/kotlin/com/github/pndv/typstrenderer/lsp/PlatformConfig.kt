@@ -2,6 +2,7 @@ package com.github.pndv.typstrenderer.lsp
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.github.pndv.typstrenderer.lsp.PlatformConfig.tinymistBaseUrl
 import com.intellij.openapi.diagnostic.logger
 import org.jetbrains.annotations.VisibleForTesting
 
@@ -54,12 +55,11 @@ data class ToolConfig(val baseUrl: String, val platforms: Map<PlatformKey, Platf
 }
 
 /**
- * Declarative platform matrix for `tinymist` and `typst` downloads, loaded from
- * `/platforms.json` on the plugin classpath. Exposes per-tool configs plus a
- * single authoritative `supported` set — the intersection of the two tools'
- * platforms. The plugin requires both binaries to function end-to-end, so the
- * intersection is what gates the auto-download flow and the unsupported-platform
- * error message.
+ * Declarative platform matrix for the `tinymist` download, loaded from
+ * `/platforms.json` on the plugin classpath. Exposes the tinymist config plus a
+ * single authoritative `supported` set — the platforms tinymist ships a binary
+ * for — which gates the auto-download flow and the unsupported-platform error
+ * message.
  */
 object PlatformConfig {
 
@@ -67,8 +67,6 @@ object PlatformConfig {
 
     val tinymist: ToolConfig
         get() = configs["tinymist"] ?: error("platforms.json missing 'tinymist' section")
-    val typst: ToolConfig
-        get() = configs["typst"] ?: error("platforms.json missing 'typst' section")
 
     /**
      * Test-only override for the tinymist download base URL. When non-null,
@@ -85,11 +83,11 @@ object PlatformConfig {
         get() = tinymistBaseUrlOverride ?: tinymist.baseUrl
 
     /**
-     * Platforms on which BOTH tools are available. This is the authoritative
+     * Platforms tinymist ships a binary for. This is the authoritative
      * "supported platform" set for the auto-download flow.
      */
     val supported: Set<PlatformKey> by lazy {
-        tinymist.supportedPlatforms() intersect typst.supportedPlatforms()
+        tinymist.supportedPlatforms()
     }
 
     fun isSupported(key: PlatformKey): Boolean = key in supported

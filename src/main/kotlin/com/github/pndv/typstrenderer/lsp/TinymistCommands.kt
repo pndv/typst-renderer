@@ -9,6 +9,7 @@ import com.google.gson.JsonNull
 import com.google.gson.JsonPrimitive
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.platform.lsp.api.LspServer
 import com.intellij.platform.lsp.api.LspServerManager
@@ -134,6 +135,8 @@ internal object TinymistCommands {
             val result = outcome ?: ExportPdfResult.Unavailable
             log.debug { "exportPdf($source) -> $result" }
             return result
+        } catch (e: ProcessCanceledException) {
+            throw e
         } catch (e: Exception) {
             log.error("Error exporting PDF for $source", e)
             throw e

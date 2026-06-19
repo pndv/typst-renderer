@@ -36,8 +36,7 @@ class PlatformConfigTest {
         val negatives = listOf(
             PlatformKey("freebsd", "x64"),
             PlatformKey("solaris", "sparc"),
-            PlatformKey("darwin", "riscv"),
-            // windows/arm64: typst has it, tinymist does not → excluded by intersection
+            PlatformKey("darwin", "riscv"), // windows/arm64: tinymist ships no binary for it
             PlatformKey("windows", "arm64"),
         )
         for (key in negatives) {
@@ -47,18 +46,13 @@ class PlatformConfigTest {
 
 
     @Test
-    fun assetFor_perToolStillResolvesOnToolSpecificPlatforms() {
-        val winArm = PlatformKey("windows", "arm64")
-        // typst ships a windows/arm64 build
-        val typstEntry = PlatformConfig.typst.assetFor(winArm)
-        assertNotNull("typst should have an asset for $winArm", typstEntry)
-        assertEquals("typst-aarch64-pc-windows-msvc.zip", typstEntry!!.asset)
-        assertEquals("zip", typstEntry.archive)
-
-        // tinymist does NOT — that's why the intersection excludes this platform
+    fun assetFor_unsupportedPlatform_returnsNullAndIsNotSupported() {
+        val winArm =
+            PlatformKey(
+                "windows",
+                "arm64"
+            ) // tinymist ships no windows/arm64 build, so there's no asset and the platform isn't supported.
         assertNull("tinymist should not have an asset for $winArm", PlatformConfig.tinymist.assetFor(winArm))
-
-        // And the gating predicate reflects the intersection
         assertFalse(PlatformConfig.isSupported(winArm))
     }
 
@@ -113,7 +107,7 @@ class PlatformConfigTest {
 
     @Test
     fun platformsJsonSchema_allAssetsNonEmpty() {
-        for (tool in listOf(PlatformConfig.tinymist, PlatformConfig.typst)) {
+        for (tool in listOf(PlatformConfig.tinymist)) {
             for ((key, entry) in tool.platforms) {
                 assertTrue("asset empty for $key", entry.asset.isNotBlank())
             }
@@ -123,7 +117,7 @@ class PlatformConfigTest {
     @Test
     fun platformsJsonSchema_archiveIsNullOrRecognized() {
         val allowed = setOf(null, "tarxz", "zip")
-        for (tool in listOf(PlatformConfig.tinymist, PlatformConfig.typst)) {
+        for (tool in listOf(PlatformConfig.tinymist)) {
             for ((key, entry) in tool.platforms) {
                 assertTrue(
                     "archive for $key is not one of $allowed: ${entry.archive}",
@@ -135,7 +129,7 @@ class PlatformConfigTest {
 
     @Test
     fun platformsJsonSchema_baseUrlsAreValid() {
-        for (tool in listOf(PlatformConfig.tinymist, PlatformConfig.typst)) {
+        for (tool in listOf(PlatformConfig.tinymist)) {
             val uri = URI(tool.baseUrl)
             assertEquals("https", uri.scheme)
             assertNotNull(uri.host)
@@ -144,16 +138,16 @@ class PlatformConfigTest {
 
     @Test
     fun platformsJsonSchema_noDuplicatePlatformKeys() {
-        for (tool in listOf(PlatformConfig.tinymist, PlatformConfig.typst)) {
+        for (tool in listOf(PlatformConfig.tinymist)) {
             val keys = tool.platforms.keys
             assertEquals(keys.size, keys.toSet().size)
         }
     }
 
     @Test
-    fun platformsJsonSchema_intersectionIsNonEmpty() {
+    fun platformsJsonSchema_supportedIsNonEmpty() {
         assertFalse(
-            "Intersection of tinymist and typst platforms must be non-empty — " + "if someone drops a platform from one tool and the overlap vanishes, catch it here.",
+            "tinymist's supported-platform set must be non-empty — if someone empties the " + "platforms list in platforms.json, the auto-download flow would silently never fire; catch it here.",
             PlatformConfig.supported.isEmpty(),
         )
     }
@@ -174,7 +168,7 @@ class PlatformConfigTest {
 
     @Test
     fun downloadUrl_isBaseUrlSlashAsset_forEveryEntry() {
-        for ((toolName, tool) in mapOf("tinymist" to PlatformConfig.tinymist, "typst" to PlatformConfig.typst)) {
+        for ((toolName, tool) in mapOf("tinymist" to PlatformConfig.tinymist)) {
             for ((key, entry) in tool.platforms) {
                 val expected = "${tool.baseUrl}/${entry.asset}"
                 val uri = URI(expected)

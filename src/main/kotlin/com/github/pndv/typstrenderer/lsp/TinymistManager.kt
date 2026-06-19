@@ -7,7 +7,7 @@ import com.intellij.openapi.components.Service
 import java.io.File
 
 /**
- * Resolves the tinymist and typst binary paths using the following priority:
+ * Resolves the tinymist binary path using the following priority:
  * 1. User-configured path in settings
  * 2. Binary found on system PATH and well-known install locations
  * 3. Previously downloaded binary in the plugin data directory
@@ -29,15 +29,6 @@ class TinymistManager {
     )
 
     /**
-     * Resolves the typst CLI binary path, or null if not available.
-     */
-    fun resolveTypstPath(): String? = resolveBinaryPath(
-        configuredPath = TypstSettingsState.getInstance().typstPath,
-        findOnPath = { findBinary("typst") },
-        downloadedBinary = getDownloadedTypstPath(),
-    )
-
-    /**
      * Returns the directory where the downloaded tinymist binary is stored.
      */
     fun getDownloadDir(): File {
@@ -51,14 +42,6 @@ class TinymistManager {
      */
     fun getDownloadedBinaryPath(): File {
         val binaryName = if (isWindows()) "tinymist.exe" else "tinymist"
-        return File(getDownloadDir(), binaryName)
-    }
-
-    /**
-     * Returns the expected path for the downloaded typst CLI binary.
-     */
-    fun getDownloadedTypstPath(): File {
-        val binaryName = if (isWindows()) "typst.exe" else "typst"
         return File(getDownloadDir(), binaryName)
     }
 
@@ -83,16 +66,6 @@ class TinymistManager {
         }
 
         /**
-         * Determines the GitHub release asset name for the Typst CLI on the current platform.
-         * Typst releases are compressed archives (.tar.xz on Unix, .zip on Windows).
-         * Returns null if the host platform is not in typst's supported matrix.
-         */
-        fun getTypstPlatformAssetName(): String? {
-            val key = PlatformKey.currentHost(osName, osArch) ?: return null
-            return PlatformConfig.typst.assetFor(key)?.asset
-        }
-
-        /**
          * Checks whether a file exists and is a runnable binary.
          *
          * On Unix, [File.canExecute] checks the executable permission bit.
@@ -101,9 +74,9 @@ class TinymistManager {
          */
         /**
          * Pure-function core of the 3-stage binary resolution fallback.
-         * The instance methods [resolveTinymistPath] / [resolveTypstPath] are
-         * thin wrappers that supply the real settings, PATH lookup, and
-         * downloaded file. Exposed for unit testing without an IntelliJ fixture.
+         * The instance method [resolveTinymistPath] is a thin wrapper that
+         * supplies the real settings, PATH lookup, and downloaded file.
+         * Exposed for unit testing without an IntelliJ fixture.
          */
         internal fun resolveBinaryPath(
             configuredPath: String,
@@ -124,7 +97,7 @@ class TinymistManager {
             if (!file.isFile) return false
             if (isWindows()) {
                 val ext = file.extension.lowercase()
-                return ext in listOf("exe", "cmd", "bat", "com") || file.canExecute()
+                return ext in listOf("exe", "cmd", "bat", "com")
             }
             return file.canExecute()
         }

@@ -1,10 +1,10 @@
 package com.github.pndv.typstrenderer.toolWindow
 
 import com.github.pndv.typstrenderer.lsp.resolveTypstRoot
-import com.intellij.openapi.diagnostic.debug
-import com.intellij.openapi.diagnostic.logger
 import com.intellij.execution.filters.Filter
 import com.intellij.execution.filters.OpenFileHyperlinkInfo
+import com.intellij.openapi.diagnostic.debug
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -47,10 +47,10 @@ import java.nio.file.Path
 class TypstConsoleFilter(private val project: Project) : Filter {
 
     private val log = logger<TypstConsoleFilter>()
-    private val typstRoot: String? by lazy {
+    private fun typstRoot(): String? {
         val root = resolveTypstRoot(project)
         log.debug { "Typst project root: $root" }
-        root
+        return root
     }
 
     override fun applyFilter(line: String, entireLength: Int): Filter.Result? {
@@ -88,7 +88,7 @@ class TypstConsoleFilter(private val project: Project) : Filter {
     private fun resolveExistingVirtualFile(rawPath: String): VirtualFile? {
         log.debug { "Resolving raw path: $rawPath" }
 
-        val absolutePath: Path? = computeAbsolutePath(rawPath, typstRoot)
+        val absolutePath: Path? = computeAbsolutePath(rawPath, typstRoot())
         log.debug { "Raw path $rawPath -> Absolute path: $absolutePath"}
         if (absolutePath == null) {
             return null

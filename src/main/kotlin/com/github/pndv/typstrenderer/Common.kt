@@ -10,22 +10,24 @@ import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.project.Project
 
 object Common {
-    internal fun getConsoleView(project: Project, log: Logger): ConsoleView?  {
-        log.debug { "Getting console view for project ${project.name}"}
-        val console = project.service<TypstConsoleHolder>().console
+
+    internal fun getConsoleView(project: Project, log: Logger): Pair<TypstConsoleHolder, ConsoleView?> {
+        log.debug { "Getting console view for project ${project.name}" }
+        val consoleService: TypstConsoleHolder = project.service<TypstConsoleHolder>()
+        val console = consoleService.console
         if (console == null) {
             log.warn("Could not get console view for project ${project.name}. The console is null.")
         }
-        return console
+        return Pair(consoleService, console)
     }
 
     internal fun printToConsole(project: Project, log: Logger, message: String, contentType: ConsoleViewContentType) {
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
-
-            val consoleView = getConsoleView(project, log)
+            val (consoleService, consoleView) = getConsoleView(project, log)
             if (consoleView == null) {
-                log.debug {"Could not print to console: $message. The console is null."}
+                log.debug { "Could not print to console: $message. The console is null. Appending to print later" }
+                consoleService.appendToBuffer(message, contentType)
                 return@invokeLater
             }
 
@@ -33,10 +35,18 @@ object Common {
         }
     }
 
+    @Suppress("unused")
     internal fun clearConsoleView(project: Project, log: Logger) {
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
-            val consoleView = getConsoleView(project, log) ?: return@invokeLater
+            val (consoleService, consoleView) = getConsoleView(project, log)
+
+            if (consoleView == null) {
+                log.debug { "Could not clear console: The console is null. Clearing the buffer as well" }
+                consoleService.clearBuffer()
+                return@invokeLater
+            }
+
             consoleView.clear()
         }
     }
