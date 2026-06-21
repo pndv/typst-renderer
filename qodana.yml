@@ -2,7 +2,7 @@
 # https://www.jetbrains.com/help/qodana/qodana-yaml.html
 
 version: "1.0"
-projectJDK: "21"
+projectJDK: "25"
 profile:
   name: qodana.recommended
 exclude:
