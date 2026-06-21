@@ -1,5 +1,5 @@
-name: Setup Java and Gradle
-description: Sets up Java and Gradle with standard project settings
+name: Setup Gradle
+description: Sets up Gradle with standard project settings (centralises versioning)
 
 inputs:
   cache-read-only:
@@ -9,11 +9,7 @@ inputs:
 runs:
   using: composite
   steps:
-
-    - name: Setup Java
-      uses: ./.github/actions/setup-java
-
     - name: Setup Gradle
-      uses: ./.github/actions/setup-gradle
+      uses: gradle/actions/setup-gradle@v6
       with:
         cache-read-only: ${{ inputs.cache-read-only }}

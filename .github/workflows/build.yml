@@ -19,6 +19,8 @@ on:
     branches: [ main ]
   # Trigger the workflow on any pull request
   pull_request:
+  schedule: # For weekly CodeQL analysis
+    - cron: '30 3 * * 0,4'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -32,27 +34,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
+      #      # Free GitHub Actions Environment Disk Space
+      #      - name: Maximize Build Space
+      #        uses: jlumbroso/free-disk-space@v1.3.1
+      #        with:
+      #          tool-cache: false
+      #          large-packages: false
 
       # Check out the current repository
       - name: Fetch Sources
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7 # For first time run, it is needed since GitHub does not know about local actions without checking out the repo
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
+      #      # Set up the Java environment for the next steps
+      #      - name: Setup Java
+      #        uses: ./.github/actions/setup-java
 
       # Setup Gradle
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: ./.github/actions/setup-java-gradle
 
       # Defensive sanity-check: the PDF.js viewer assets are vendored into
       # src/main/resources/pdfjs and committed to git. If someone accidentally
@@ -84,6 +83,36 @@ jobs:
           name: ${{ steps.artifact.outputs.filename }}
           path: ./build/distributions/content/*/*
 
+  # Run CodeQL analysis
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+
+      - name: Setup Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: autobuild
+
+      #      - name: Build with Gradle
+      #        run: ./gradlew clean build -x test
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:java-kotlin"
+
   # Run tests and upload a code coverage report
   test:
     name: Test
@@ -91,15 +120,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
+      #      # Free GitHub Actions Environment Disk Space
+      #      - name: Maximize Build Space
+      #        uses: jlumbroso/free-disk-space@v1.3.1
+      #        with:
+      #          tool-cache: false
+      #          large-packages: false
 
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
 
       # Set up the environment for the next steps
@@ -138,26 +167,23 @@ jobs:
       pull-requests: write
     steps:
 
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
+      #      # Free GitHub Actions Environment Disk Space
+      #      - name: Maximize Build Space
+      #        uses: jlumbroso/free-disk-space@v1.3.1
+      #        with:
+      #          tool-cache: false
+      #          large-packages: false
 
       # Check out the current repository
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }} # to check out the actual pull request commit, not the merge commit
           fetch-depth: 0 # a full history is required for pull request analysis
 
       # Set up the Java environment for the next steps
       - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 21
+        uses: ./.github/actions/setup-java
 
       # Run Qodana inspections
       - name: Qodana - Code Inspection
@@ -174,15 +200,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
+      #      # Free GitHub Actions Environment Disk Space
+      #      - name: Maximize Build Space
+      #        uses: jlumbroso/free-disk-space@v1.3.1
+      #        with:
+      #          tool-cache: false
+      #          large-packages: false
 
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Set up the environment for the next steps
       - name: Setup Java and Gradle
@@ -214,7 +240,7 @@ jobs:
     steps:
 
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Set up the environment for the next steps
       - name: Setup Java and Gradle
