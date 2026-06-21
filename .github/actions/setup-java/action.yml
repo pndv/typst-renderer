@@ -1,0 +1,12 @@
+name: Setup Java
+description: Sets up Java (centralises versioning)
+
+runs:
+  using: composite
+  steps:
+
+    - name: Setup Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: zulu
+        java-version: 25
