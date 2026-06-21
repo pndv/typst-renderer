@@ -3,12 +3,7 @@ package com.github.pndv.typstrenderer.editor
 import com.intellij.openapi.diagnostic.logger
 import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelHandlerContext
-import io.netty.handler.codec.http.DefaultFullHttpResponse
-import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.HttpHeaderNames
-import io.netty.handler.codec.http.HttpResponseStatus
-import io.netty.handler.codec.http.HttpVersion
-import io.netty.handler.codec.http.QueryStringDecoder
+import io.netty.handler.codec.http.*
 import org.jetbrains.ide.BuiltInServerManager
 import org.jetbrains.ide.HttpRequestHandler
 import org.jetbrains.io.send
@@ -47,6 +42,7 @@ internal object PdfjsEndpoints {
         "${baseUrl()}/pdf/$previewerId?v=$cacheBust"
 
     /** URL serving the JSQuery-injected bridge JS for a given previewer. */
+    @Suppress("unused")
     fun bridgeUrl(previewerId: String): String = "${baseUrl()}/bridge/$previewerId"
 }
 
@@ -125,7 +121,8 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
 
         if (resource == null) {
             log.warn("[pdfjs] 404: $fullPath")
-            sendStatus(HttpResponseStatus.NOT_FOUND, request, context)
+            val resp = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND)
+            resp.send(context.channel(), request)
             return true
         }
         log.info("[pdfjs] 200: $fullPath -> ${resource.bytes.size} bytes (${resource.mime})")
@@ -150,28 +147,20 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
         }
         path.startsWith("/pdf/") -> {
             val id = path.removePrefix("/pdf/")
-            val reg = PdfjsPreviewerRegistry.get(id)
-            reg?.currentPdf?.invoke()?.let { fileResource(it, "application/pdf") }
+            PdfjsPreviewerRegistry.get(id)?.let { reg ->
+                reg.currentPdf()?.let { if (!it.isFile) null else Resource(it.readBytes(), "application/pdf") }
+            }
         }
         path.startsWith("/bridge/") -> {
             val id = path.removePrefix("/bridge/")
-            val reg = PdfjsPreviewerRegistry.get(id)
-            val js = reg?.bridgeJs?.invoke().orEmpty()
-            Resource(js.toByteArray(Charsets.UTF_8), "application/javascript; charset=utf-8")
+            PdfjsPreviewerRegistry.get(id)?.let { reg ->
+                Resource(reg.bridgeJs().toByteArray(Charsets.UTF_8), "application/javascript; charset=utf-8")
+            }
         }
         else -> {
             log.warn("[pdfjs] unsupported path: $path. Returning null.")
             null
         }
-    }
-
-    private fun sendStatus(
-        status: HttpResponseStatus,
-        request: FullHttpRequest,
-        context: ChannelHandlerContext
-    ) {
-        val resp = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status)
-        resp.send(context.channel(), request)
     }
 
     internal data class Resource(val bytes: ByteArray, val mime: String) {
@@ -195,14 +184,8 @@ internal class PdfjsPreviewServer : HttpRequestHandler() {
     }
 
     private fun classpath(resourcePath: String): Resource? {
-        val bytes = javaClass.getResourceAsStream(resourcePath)?.use { it.readBytes() }
-            ?: return null
+        val bytes = javaClass.getResourceAsStream(resourcePath)?.use { it.readBytes() } ?: return null
         return Resource(bytes, mimeFor(resourcePath))
-    }
-
-    private fun fileResource(f: File, mime: String): Resource? {
-        if (!f.isFile) return null
-        return Resource(f.readBytes(), mime)
     }
 
     private fun mimeFor(path: String): String = when (path.substringAfterLast('.', "").lowercase()) {

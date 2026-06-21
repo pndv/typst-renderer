@@ -9,9 +9,9 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Tests for download URL resolution HEAD-request logic in [TinymistDownloadService]
- * and [TypstDownloadService]. Runs against a local [MockWebServer] by passing the
- * server's URL as `baseUrl` to `resolveLatestDownloadUrl`.
+ * Tests for download URL resolution HEAD-request logic in [TinymistDownloadService].
+ * Runs against a local [MockWebServer] by passing the server's URL as `baseUrl` to
+ * `resolveLatestDownloadUrl`.
  *
  * Covers Batch 2 of the test-coverage plan:
  *  - D.54  HEAD 404 → returns null
@@ -26,7 +26,6 @@ class DownloadUrlResolutionTest {
 
     private lateinit var server: MockWebServer
     private lateinit var tinymistService: TinymistDownloadService
-    private lateinit var typstService: TypstDownloadService
 
     @Before
     fun setUp() {
@@ -34,7 +33,6 @@ class DownloadUrlResolutionTest {
         // App-level @Service classes have a no-arg constructor; instantiate directly
         // to avoid requiring the full IntelliJ ApplicationManager.
         tinymistService = TinymistDownloadService::class.java.getDeclaredConstructor().newInstance()
-        typstService = TypstDownloadService::class.java.getDeclaredConstructor().newInstance()
     }
 
     @After
@@ -60,16 +58,6 @@ class DownloadUrlResolutionTest {
         assertTrue(request.path?.endsWith("/tinymist-darwin-arm64") == true)
     }
 
-    @Test
-    fun typst_resolveLatestDownloadUrl_head200_returnsConstructedUrl() {
-        server.enqueue(MockResponse().setResponseCode(200))
-
-        val url = typstService.resolveLatestDownloadUrl(baseUrl(), "typst-aarch64-apple-darwin.tar.xz")
-
-        assertNotNull(url)
-        assertEquals("${baseUrl()}/typst-aarch64-apple-darwin.tar.xz", url)
-    }
-
     // ---- D.54  HEAD 404 → returns null ----
 
     @Test
@@ -79,15 +67,6 @@ class DownloadUrlResolutionTest {
         val url = tinymistService.resolveLatestDownloadUrl(baseUrl(), "tinymist-bogus")
 
         assertNull("404 should cause null URL (asset doesn't exist)", url)
-    }
-
-    @Test
-    fun typst_resolveLatestDownloadUrl_head404_returnsNull() {
-        server.enqueue(MockResponse().setResponseCode(404))
-
-        val url = typstService.resolveLatestDownloadUrl(baseUrl(), "typst-bogus.tar.xz")
-
-        assertNull(url)
     }
 
     // ---- HEAD network error → returns null ----
@@ -101,15 +80,6 @@ class DownloadUrlResolutionTest {
         val url = tinymistService.resolveLatestDownloadUrl(baseUrl(), "tinymist-darwin-arm64")
 
         assertNull("Network error should cause null URL, not propagate exception", url)
-    }
-
-    @Test
-    fun typst_resolveLatestDownloadUrl_networkError_returnsNull() {
-        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
-
-        val url = typstService.resolveLatestDownloadUrl(baseUrl(), "typst-aarch64-apple-darwin.tar.xz")
-
-        assertNull(url)
     }
 
     @Test

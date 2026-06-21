@@ -49,6 +49,38 @@ class TypstFilePreviewerDecisionsTest {
         assertSame(ExportReadiness.GiveUp, decideExportReadiness(serverReady = false, pollCount = 11, maxPolls = 10))
     }
 
+    // ---- backoffDelayMs: the cold-start readiness poll's exponential backoff ----
+
+    @Test
+    fun `backoff starts at the initial delay for the first poll`() { // nextPollCount is 1-based; the first scheduled poll waits the initial delay, not double it.
+        assertEquals(250L, backoffDelayMs(pollCount = 1, initialMs = 250L, maxMs = 15_000L))
+    }
+
+    @Test
+    fun `backoff doubles each poll until it reaches the cap`() {
+        assertEquals(500L, backoffDelayMs(pollCount = 2, initialMs = 250L, maxMs = 15_000L))
+        assertEquals(1_000L, backoffDelayMs(pollCount = 3, initialMs = 250L, maxMs = 15_000L))
+        assertEquals(2_000L, backoffDelayMs(pollCount = 4, initialMs = 250L, maxMs = 15_000L))
+        assertEquals(8_000L, backoffDelayMs(pollCount = 6, initialMs = 250L, maxMs = 15_000L))
+    }
+
+    @Test
+    fun `backoff is clamped to the cap once doubling would exceed it`() { // 250 << 6 = 16000 > 15000, so poll 7 onward sits at the ceiling rather than growing.
+        assertEquals(15_000L, backoffDelayMs(pollCount = 7, initialMs = 250L, maxMs = 15_000L))
+        assertEquals(15_000L, backoffDelayMs(pollCount = 50, initialMs = 250L, maxMs = 15_000L))
+    }
+
+    @Test
+    fun `backoff never overflows for large poll counts`() { // The shift is bounded, so even an absurd count returns the cap rather than a wrapped negative.
+        assertEquals(15_000L, backoffDelayMs(pollCount = Int.MAX_VALUE, initialMs = 250L, maxMs = 15_000L))
+    }
+
+    @Test
+    fun `backoff clamps non-positive poll counts to the initial delay`() {
+        assertEquals(250L, backoffDelayMs(pollCount = 0, initialMs = 250L, maxMs = 15_000L))
+        assertEquals(250L, backoffDelayMs(pollCount = -5, initialMs = 250L, maxMs = 15_000L))
+    }
+
     // ---- decideUnavailableAction: post-Unavailable dispatch + transient retry ----
 
     @Test

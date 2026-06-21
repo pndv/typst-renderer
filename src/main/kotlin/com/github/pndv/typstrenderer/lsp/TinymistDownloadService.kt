@@ -14,6 +14,7 @@ import com.intellij.util.io.HttpRequests
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.util.concurrent.atomic.AtomicBoolean
 
 private val LOG = logger<TinymistDownloadService>()
 
@@ -23,16 +24,14 @@ private val LOG = logger<TinymistDownloadService>()
 @Service(Service.Level.APP)
 class TinymistDownloadService {
 
-    @Volatile
-    var isDownloading: Boolean = false
-        private set
+    val isDownloading: AtomicBoolean = AtomicBoolean(false)
 
     /**
      * Downloads tinymist in a background task with a progress indicator.
      * Calls [onComplete] on the EDT when done (true = success, false = failure).
      */
     fun downloadInBackground(project: Project?, onComplete: ((Boolean) -> Unit)? = null) {
-        if (isDownloading) {
+        if (!isDownloading.compareAndSet(false, true)) {
             onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
             return
         }
@@ -45,7 +44,6 @@ class TinymistDownloadService {
         // from any caller context.
         object : Task.Backgroundable(project, TypstBundle.message("download.tinymist.task.title"), true) {
             override fun run(indicator: ProgressIndicator) {
-                isDownloading = true
                 try {
                     indicator.isIndeterminate = false
                     indicator.text = TypstBundle.message("download.tinymist.resolving")
@@ -107,7 +105,7 @@ class TinymistDownloadService {
                     }
                     onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                 } finally {
-                    isDownloading = false
+                    isDownloading.set(false)
                 }
             }
         }.queue()
@@ -141,8 +139,7 @@ class TinymistDownloadService {
                 .saveToFile(tempFile, indicator)
 
             atomicMove(tempFile, target)
-        } finally {
-            // Clean up temp file if it still exists (e.g., on error)
+        } finally { // Clean up the temporary file if it still exists (e.g. on error)
             if (tempFile.exists()) {
                 tempFile.delete()
             }
@@ -165,7 +162,7 @@ class TinymistDownloadService {
 
         /**
          * Moves [tempFile] to [target], overwriting if [target] exists.
-         * Tries a fast rename first, falling back to copy + delete when the
+         * Tries a fast rename first, falling back to copy and delete when the
          * rename isn't possible (e.g. across filesystems).
          */
         internal fun atomicMove(tempFile: File, target: File) {
@@ -181,10 +178,7 @@ class TinymistDownloadService {
         internal fun unsupportedPlatformMessage(): String {
             val os = System.getProperty("os.name")
             val arch = System.getProperty("os.arch")
-            return "Your platform (os=$os, arch=$arch) is not fully supported. " +
-                    "The plugin requires both tinymist and typst, available on: " +
-                    "${PlatformConfig.supportedPlatformsDescription()}. " +
-                    "On other platforms, install the tools manually and set their paths " +
+            return "Your platform (os=$os, arch=$arch) is not fully supported. " + "The plugin requires tinymist, available on: " + "${PlatformConfig.supportedPlatformsDescription()}. " + "On other platforms, install tinymist manually and set its path " +
                     "in Settings → Tools → Typst."
         }
     }

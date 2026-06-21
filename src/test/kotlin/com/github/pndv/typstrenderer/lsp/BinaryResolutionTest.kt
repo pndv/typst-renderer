@@ -13,10 +13,9 @@ import java.nio.file.Files
 /**
  * Tests for the 3-stage binary resolution fallback in [TinymistManager].
  *
- * The production [TinymistManager.resolveTinymistPath] and
- * [TinymistManager.resolveTypstPath] are thin wrappers over [resolveBinaryPath];
- * testing the pure helper gives us stage-by-stage priority coverage without
- * needing a `BasePlatformTestCase` fixture.
+ * The production [TinymistManager.resolveTinymistPath] is a thin wrapper over
+ * [resolveBinaryPath]; testing the pure helper gives us stage-by-stage priority
+ * coverage without needing a `BasePlatformTestCase` fixture.
  *
  * Cross-platform: on Windows [com.github.pndv.typstrenderer.lsp.TinymistManager.Companion.isBinaryExecutable] recognises the `.exe` extension,
  * so [executableFile] appends it automatically. On Unix the POSIX execute bit is set.

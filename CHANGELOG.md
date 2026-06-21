@@ -4,6 +4,47 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-19
+
+A maintenance release: bug fixes, responsiveness improvements, and removal of the unwired typst CLI code that
+0.4.0 kept in the tree as a revert hatch.
+
+### Fixed
+
+- Console output produced **before** the Typst Output tool window is opened is no longer dropped. Such messages are
+  buffered and flushed in order once the console becomes available, so a freshly-opened project keeps its first
+  compile's diagnostics.
+- **Rename** (`prepareRename`/`rename`) no longer blocks the EDT on the tinymist round-trip. The requests run off the
+  EDT under a cancellable modal progress, and cancelling the dialog aborts quietly instead of being reported as a
+  failure.
+- Exceptions thrown during a PDF export are now surfaced to the preview pane instead of escaping unhandled;
+  `ProcessCanceledException` is always re-thrown.
+- The tinymist "already downloading" guard is now atomic, so two near-simultaneous triggers can no longer queue
+  duplicate downloads.
+- After a successful tinymist auto-download, the language server is (re)started through the platform rather than via a
+  stale starter captured from the original file-open, so the server reliably comes up post-download.
+- The PDF.js preview server now returns a proper **404** for an unknown previewer resource, instead of a 200 with an
+  empty body.
+- The Typst project root used for console hyperlink resolution is now read fresh on each use, so a changed root takes
+  effect without restarting.
+- Windows executable detection no longer relies on `File.canExecute()`, which could misclassify non-executable files.
+
+### Changed
+
+- Readiness polling for the preview now uses an exponential backoff with a capped delay, balancing responsiveness
+  against polling cost.
+- PDF reload compares paths with `FileUtil.pathsEqual()` for cross-platform, case-insensitive matching.
+- `exportJob`, `reloadJob`, and `outputPdf` are now `@Volatile` for safer cross-thread access.
+- Declared an explicit upper compatibility bound (`until-build = 261.*`). The LSP integration calls
+  `LspServer.sendRequestSync`, which 2026.2 relocates to the `LspClient` super-interface; until that migration lands
+  the plugin is pinned to the 2026.1 line to avoid a runtime `NoSuchMethodError`.
+
+### Removed
+
+- The unwired typst CLI code retained as a revert hatch in 0.4.0: `TypstCommandBuilder`, `TypstDownloadService`, and
+  the corresponding `TypstCommandBuilderTest` and `ArchiveExtractionTest` suites.
+- The unused `<applicationService>` entry from `plugin.xml`.
+
 ## [0.4.0] - 2026-06-10
 
 The plugin now compiles entirely through the bundled **tinymist** language server — the standalone `typst`
@@ -225,7 +266,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.1...HEAD
+[0.4.1]: https://github.com/pndv/typst-renderer/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/pndv/typst-renderer/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/pndv/typst-renderer/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/pndv/typst-renderer/compare/0.1.2...0.2.0

@@ -18,8 +18,7 @@ import java.nio.file.Files
  * Unlike [resolveTypstRoot] there is no two-input fallback chain, so the
  * function does not need a pure-function core — the `Project` overload is
  * driven directly via a mocked [Project] that returns a real
- * [TypstProjectSettingsState] from `getService`. Same mocking pattern as
- * [com.github.pndv.typstrenderer.compile.TypstCommandBuilderTest].
+ * [TypstProjectSettingsState] from `getService`.
  *
  * The temp directory and its three fixture paths (a real directory, a
  * regular file, a non-existent path) are built once in `@BeforeClass` and
