@@ -1,6 +1,6 @@
 # Typst Renderer — IntelliJ Plugin
 
-> **IntelliJ Platform Plugin · v0.4.0**
+> **IntelliJ Platform Plugin · v0.4.1**
 
 <!-- Plugin description -->
 Full Typst support for IntelliJ-based IDEs — syntax highlighting, live PDF preview, LSP-powered completions and
@@ -127,6 +127,9 @@ No external tools required. The plugin handles everything on first launch.
 
 - **IntelliJ-based IDE** — Compatible with IntelliJ IDEA, Android Studio, CLion, GoLand, PyCharm, Rider, RustRover,
   WebStorm, and eight more.
+- **IDE version — 2026.1 only (build `261.x`).** This release is **not yet compatible with 2026.2**: the platform's
+  bundled LSP API changed in a binary-incompatible way, so the plugin is pinned to the 2026.1 line for now. 2026.2
+  support is tracked in [issue #74](https://github.com/pndv/typst-renderer/issues/74).
 - **Internet connection** — Required on first launch to download tinymist from GitHub. Subsequent launches work fully
   offline.
 - **Custom tinymist path** — Already have tinymist installed? It will be detected automatically, or you can set a custom

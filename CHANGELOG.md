@@ -35,6 +35,9 @@ A maintenance release: bug fixes, responsiveness improvements, and removal of th
   against polling cost.
 - PDF reload compares paths with `FileUtil.pathsEqual()` for cross-platform, case-insensitive matching.
 - `exportJob`, `reloadJob`, and `outputPdf` are now `@Volatile` for safer cross-thread access.
+- Declared an explicit upper compatibility bound (`until-build = 261.*`). The LSP integration calls
+  `LspServer.sendRequestSync`, which 2026.2 relocates to the `LspClient` super-interface; until that migration lands
+  the plugin is pinned to the 2026.1 line to avoid a runtime `NoSuchMethodError`.
 
 ### Removed
 
