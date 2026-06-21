@@ -37,11 +37,11 @@ jobs:
           languages: java-kotlin
           build-mode: autobuild
 
-      - name: Build with Gradle
-        uses: github/codeql-action/autobuild@v4
-
 #      - name: Build with Gradle
-#        run: ./gradlew clean assemble --no-daemon
+      #        uses: github/codeql-action/autobuild@v4
+
+      - name: Build with Gradle
+        run: ./gradlew clean assemble --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
