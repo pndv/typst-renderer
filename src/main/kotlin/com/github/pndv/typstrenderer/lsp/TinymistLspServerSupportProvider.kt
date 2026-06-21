@@ -9,7 +9,9 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.platform.lsp.api.LspServerManager
 import com.intellij.platform.lsp.api.LspServerSupportProvider
+import com.intellij.platform.lsp.api.startServersIfNeeded
 
 private val log = logger<TinymistLspServerSupportProvider>()
 
@@ -66,11 +68,8 @@ class TinymistLspServerSupportProvider : LspServerSupportProvider {
                 log.info("Tinymist not found, triggering auto-download for file ${file.path}")
                 TinymistDownloadService.getInstance().downloadInBackground(project) { success ->
                     if (success) {
-                        val downloadedPath = TinymistManager.getInstance().resolveTinymistPath()
-                        if (downloadedPath != null) {
-                            log.info("Tinymist downloaded successfully, starting LSP from: $downloadedPath")
-                            serverStarter.ensureServerStarted(TinymistLspServerDescriptor(project, downloadedPath))
-                        }
+                        log.info("Tinymist downloaded successfully; requesting LSP (re)start")
+                        LspServerManager.getInstance(project).startServersIfNeeded<TinymistLspServerSupportProvider>()
                     } else {
                         log.warn("Tinymist download failed; LSP server will not be started")
                         NotificationGroupManager.getInstance()

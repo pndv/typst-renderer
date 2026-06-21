@@ -10,6 +10,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import java.nio.file.Path
 
@@ -83,6 +84,8 @@ class TypstCompileService(private val project: Project) {
                         ConsoleViewContentType.ERROR_OUTPUT,
                     )
                 }
+            } catch (pce: ProcessCanceledException) {
+                throw pce
             } catch (e: Exception) {
                 printToConsole(
                     project, log,

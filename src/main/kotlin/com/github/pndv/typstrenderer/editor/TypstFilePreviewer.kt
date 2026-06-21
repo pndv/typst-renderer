@@ -16,9 +16,11 @@ import com.intellij.openapi.diagnostic.trace
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorState
 import com.intellij.openapi.fileEditor.FileEditorStateLevel
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.UserDataHolderBase
+import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -66,6 +68,21 @@ internal fun decideExportReadiness(serverReady: Boolean, pollCount: Int, maxPoll
     serverReady -> ExportReadiness.Export
     pollCount < maxPolls -> ExportReadiness.Poll(pollCount + 1)
     else -> ExportReadiness.GiveUp
+}
+
+/**
+ * Exponential backoff for the cold-start readiness poll: the delay before the [pollCount]-th
+ * readiness check, in milliseconds. Starts at [initialMs] for the first poll and doubles each
+ * step, capped at [maxMs] — so a freshly spawned tinymist (typically up within 1–3s) yields a
+ * near-instant first render, while a server that never comes up still backs off to an inexpensive
+ * steady-state poll rather than hammering the readiness check.
+ *
+ * [pollCount] is 1-based (the count carried by [ExportReadiness.Poll.nextPollCount]); values
+ * below 1 clamp to the initial delay. The shift is bounded so the doubling cannot overflow.
+ */
+internal fun backoffDelayMs(pollCount: Int, initialMs: Long, maxMs: Long): Long {
+    val shift = (pollCount - 1).coerceIn(0, 20)
+    return (initialMs shl shift).coerceAtMost(maxMs)
 }
 
 /**
@@ -125,13 +142,17 @@ class TypstFilePreviewer(
      * successful export. Read by the [PdfjsPreviewerRegistry] registration and [reloadPdf];
      * written on the export thread, hence @Volatile.
      */
+    private val reloadExecutor = AppExecutorUtil.createBoundedScheduledExecutorService("TypstPdfReload", 1)
+
     @Volatile
     private var outputPdf: File? = null
-    private val reloadExecutor = AppExecutorUtil.createBoundedScheduledExecutorService("TypstPdfReload", 1)
+
+    @Volatile
     private var reloadJob: ScheduledFuture<*>? = null
 
     /** Pending export-pipeline task: a debounced save re-export, a readiness poll, or a
      *  transient retry. Newer triggers cancel and replace it, so one chain is live at a time. */
+    @Volatile
     private var exportJob: ScheduledFuture<*>? = null
 
     private val colourScheme get() = if (ColorUtil.isDark(UIUtil.getPanelBackground())) "dark" else "light"
@@ -377,11 +398,12 @@ class TypstFilePreviewer(
             ExportReadiness.Export -> runExport(attempt = 0)
 
             is ExportReadiness.Poll -> {
-                log.debug { "[preview] tinymist not ready; poll ${isReady.nextPollCount} of $MAX_SERVER_POLLS for ${file.path}" }
+                val delayMs = backoffDelayMs(isReady.nextPollCount, INITIAL_SERVER_POLL_MS, MAX_SERVER_POLL_MS)
+                log.debug { "[preview] tinymist not ready; poll ${isReady.nextPollCount} of $MAX_SERVER_POLLS in ${delayMs}ms for ${file.path}" }
                 showWaitingPageIfNoRender()
                 exportJob = reloadExecutor.schedule(
                     { exportWhenReady(isReady.nextPollCount) },
-                    SERVER_POLL_MS,
+                    delayMs,
                     TimeUnit.MILLISECONDS,
                 )
             }
@@ -416,32 +438,39 @@ class TypstFilePreviewer(
      * a transport failure as [ExportPdfResult.Unavailable].
      */
     private fun runExport(attempt: Int) {
-        if (project.isDisposed || !file.isValid) return
+        try {
+            if (project.isDisposed || !file.isValid) return
 
-        log.debug { "[preview] exporting ${file.path} via tinymist" }
-        val result = TinymistCommands.exportPdf(project, Path.of(file.path))
-        log.debug { "[preview] export result for ${file.path}: $result" }
+            log.debug { "[preview] exporting ${file.path} via tinymist" }
+            val result = TinymistCommands.exportPdf(project, Path.of(file.path))
+            log.debug { "[preview] export result for ${file.path}: $result" }
 
-        when (result) {
-            is ExportPdfResult.Exported -> {
-                outputPdf =
-                    result.pdf.toFile() // tinymist writes the PDF outside the IDE's VFS; refresh so the VFS listener
-                // and any open editors observe the new bytes, then reload the panel.
-                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(result.pdf)
-                scheduleReloadPdf()
+            when (result) {
+                is ExportPdfResult.Exported -> {
+                    outputPdf =
+                        result.pdf.toFile() // tinymist writes the PDF outside the IDE's VFS; refresh so the VFS listener
+                    // and any open editors observe the new bytes, then reload the panel.
+                    LocalFileSystem.getInstance().refreshAndFindFileByNioFile(result.pdf)
+                    scheduleReloadPdf()
+                }
+
+                // tinymist rejected the document — show the generic error pane and route the
+                // formatted diagnostic to the Typst Output console (the user's primary signal;
+                // the error often lives in an #include-d chapter, not the focused file).
+                is ExportPdfResult.Failed -> showPreviewError(
+                    TypstBundle.message("console.compile.failed", result.detail)
+                )
+
+                // The round-trip never reached the server. handleUnavailable decides whether
+                // the server vanished (back to the readiness poll) or merely bounced (short
+                // transient retry) — see [decideUnavailableAction].
+                ExportPdfResult.Unavailable -> handleUnavailable(attempt)
             }
-
-            // tinymist rejected the document — show the generic error pane and route the
-            // formatted diagnostic to the Typst Output console (the user's primary signal;
-            // the error often lives in an #include-d chapter, not the focused file).
-            is ExportPdfResult.Failed -> showPreviewError(
-                TypstBundle.message("console.compile.failed", result.detail)
-            )
-
-            // The round-trip never reached the server. handleUnavailable decides whether
-            // the server vanished (back to the readiness poll) or merely bounced (short
-            // transient retry) — see [decideUnavailableAction].
-            ExportPdfResult.Unavailable -> handleUnavailable(attempt)
+        } catch (pce: ProcessCanceledException) {
+            throw pce
+        } catch (e: Exception) {
+            val message = TypstBundle.message("console.export.error", file.name, e.message ?: "")
+            showPreviewError(message)
         }
     }
 
@@ -526,10 +555,11 @@ class TypstFilePreviewer(
                     if (event !is VFileContentChangeEvent) continue
                     val path = event.path
 
-                    // A write to our current output PDF → reload the panel. event.path is
-                    // VFS-style ('/'-separated); normalise the java.io.File path so the match
-                    // also holds on Windows (where absolutePath uses '\').
-                    if (path == outputPdf?.path?.replace('\\', '/')) {
+                    // A write to our current output PDF → reload the panel. FileUtil.pathsEqual
+                    // canonicalises separators and compares case-insensitively on Windows, so the
+                    // VFS-style ('/'-separated) event path still matches a java.io.File path that
+                    // uses '\' and a lowercase drive letter (as tinymist reports it).
+                    if (FileUtil.pathsEqual(path, outputPdf?.path)) {
                         scheduleReloadPdf()
                         continue
                     }
@@ -653,10 +683,17 @@ class TypstFilePreviewer(
         /** Max transient export retries before surfacing a hard "LSP unavailable" error. */
         const val MAX_EXPORT_RETRIES = 5
 
-        /** Poll readiness every 15s */
-        const val SERVER_POLL_MS = 15_000L
+        /** Delay before the first readiness re-check — kept short so a quick cold start renders almost immediately. */
+        const val INITIAL_SERVER_POLL_MS = 250L
 
-        /** Give up after 10 polls (~2.5 min) */
-        const val MAX_SERVER_POLLS = 10
+        /** Ceiling the exponential backoff settles at once the early polls are exhausted. */
+        const val MAX_SERVER_POLL_MS = 15_000L
+
+        /**
+         * Give up after this many polls. With the 250ms→15s backoff above, the cumulative wait
+         * before [ExportReadiness.GiveUp] is ~150s (~2.5 min) — matching the previous flat-15s
+         * budget while making the first render far snappier.
+         */
+        const val MAX_SERVER_POLLS = 15
     }
 }

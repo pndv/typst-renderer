@@ -82,12 +82,18 @@ class TinymistManagerTest {
 
 
     @Test
-    fun isBinaryExecutable_windowsWithCanExecuteFlag_returnsTrue() {
-        assumeTrue("Windows-only", isWindows())
+    fun isBinaryExecutable_windowsNonExecExtensionWithExecuteFlag_returnsFalse() {
+        assumeTrue(
+            "Windows-only",
+            isWindows()
+        ) // On Windows we recognise executables solely by their extension. The execute bit is
+        // meaningless there (File.canExecute returns true for almost any readable file), so a
+        // file with a non-executable extension must NOT be treated as runnable even when the
+        // bit is set — otherwise binary resolution would hand the launcher an unrunnable path.
         val tmp = Files.createTempFile("foo", ".dat").toFile()
         try {
             tmp.setExecutable(true)
-            assertTrue(isBinaryExecutable(tmp))
+            assertFalse(isBinaryExecutable(tmp))
         } finally {
             tmp.delete()
         }

@@ -1,9 +1,6 @@
 package com.github.pndv.typstrenderer.settings
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertSame
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 import kotlin.reflect.full.memberProperties
 
@@ -39,21 +36,15 @@ class TypstSettingsStateTest {
     fun roundTripViaAccessors() {
         val service = newService()
         service.tinymistPath = "X"
-        service.typstPath = "Y"
-        service.autoCompileOnSave = true
         service.rememberPreviewScrollAcrossRestart = true
 
         // Each accessor reads back what was written.
         assertEquals("X", service.tinymistPath)
-        assertEquals("Y", service.typstPath)
-        assertTrue(service.autoCompileOnSave)
         assertTrue(service.rememberPreviewScrollAcrossRestart)
 
         // Same values surface via getState() — the canonical serialization path.
         val state = service.getState()
         assertEquals("X", state.tinymistPath)
-        assertEquals("Y", state.typstPath)
-        assertTrue(state.autoCompileOnSave)
         assertTrue(state.rememberPreviewScrollAcrossRestart)
     }
 
@@ -66,8 +57,6 @@ class TypstSettingsStateTest {
         // Load fresh state with different values.
         val fresh = TypstSettingsState.State(
             tinymistPath = "new-tinymist",
-            typstPath = "new-typst",
-            autoCompileOnSave = true,
             rememberPreviewScrollAcrossRestart = true,
         )
         service.loadState(fresh)
@@ -85,8 +74,6 @@ class TypstSettingsStateTest {
         )
         // And the loaded values are now reflected.
         assertEquals("new-tinymist", service.tinymistPath)
-        assertEquals("new-typst", service.typstPath)
-        assertTrue(service.autoCompileOnSave)
         assertTrue(service.rememberPreviewScrollAcrossRestart)
     }
 

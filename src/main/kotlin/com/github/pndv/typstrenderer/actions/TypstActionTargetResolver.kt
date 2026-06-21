@@ -21,11 +21,10 @@ import com.intellij.openapi.project.Project
  * 3. Return `null` when neither resolves — callers should disable the
  *    action in their `update()`.
  *
- * The existing [TypstCompileAction] / [TypstWatchAction] read
- * `CommonDataKeys.VIRTUAL_FILE` from the action data context, which works
- * for the editor / project-view popup but not for the title-bar context
- * of a tool window — so a separate resolver lives here rather than
- * unifying with the existing actions.
+ * The existing [TypstCompileAction] reads `CommonDataKeys.VIRTUAL_FILE`
+ * from the action data context, which works for the editor / project-view
+ * popup but not for the title-bar context of a tool window — so a separate
+ * resolver lives here rather than unifying with the existing action.
  */
 internal fun resolveTypstTargetFromOutputContext(project: Project): String? {
     val svc = project.service<TypstLastCompiledTracker>()
