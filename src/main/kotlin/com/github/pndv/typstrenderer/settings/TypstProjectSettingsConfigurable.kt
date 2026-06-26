@@ -10,7 +10,7 @@ import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
-import com.intellij.platform.lsp.api.LspServerManager
+import com.intellij.platform.lsp.api.LspClientManager
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import javax.swing.JComponent
@@ -79,12 +79,11 @@ class TypstProjectSettingsConfigurable(private val project: Project) : Configura
         if (rootChanged || fontPathChanged || exportPathChanged) { // tinymist reads --font-path and its working directory at process spawn,
             // and the outputPath template at LSP init — bounce the server so the new
             // argv and initializationOptions take effect.
-            val lspServerManager = LspServerManager.getInstance(project)
+            val lspClientManager = LspClientManager.getInstance(project)
             ApplicationManager.getApplication().executeOnPooledThread {
                 log.debug {"Settings changed. Restarting LSP server for project ${project.name}"}
                 try {
-                    lspServerManager
-                        .stopAndRestartIfNeeded(TinymistLspServerSupportProvider::class.java)
+                    lspClientManager.stopAndRestartClientsIfNeeded(TinymistLspServerSupportProvider::class.java)
                 } catch (pce: ProcessCanceledException) {
                     throw pce
                 } catch (e: Throwable) {

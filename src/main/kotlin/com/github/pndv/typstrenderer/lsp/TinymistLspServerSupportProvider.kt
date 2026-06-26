@@ -9,9 +9,9 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.platform.lsp.api.LspServerManager
-import com.intellij.platform.lsp.api.LspServerSupportProvider
-import com.intellij.platform.lsp.api.startServersIfNeeded
+import com.intellij.platform.lsp.api.LspClientManager
+import com.intellij.platform.lsp.api.LspIntegrationProvider
+import com.intellij.platform.lsp.api.startClientsIfNeeded
 
 private val log = logger<TinymistLspServerSupportProvider>()
 
@@ -39,12 +39,10 @@ internal fun decideLspAction(
     else -> LspStartAction.TriggerDownload
 }
 
-class TinymistLspServerSupportProvider : LspServerSupportProvider {
+class TinymistLspServerSupportProvider : LspIntegrationProvider {
 
     override fun fileOpened(
-        project: Project,
-        file: VirtualFile,
-        serverStarter: LspServerSupportProvider.LspServerStarter
+        project: Project, file: VirtualFile, clientStarter: LspIntegrationProvider.LspClientStarter
     ) {
         val isUnitTestMode = ApplicationManager.getApplication().isUnitTestMode
         val isTypstFile = file.fileType == TypstFileType
@@ -62,14 +60,14 @@ class TinymistLspServerSupportProvider : LspServerSupportProvider {
             }
             is LspStartAction.StartServer -> {
                 log.info("Starting tinymist LSP from: ${action.tinymistPath} for file ${file.path}")
-                serverStarter.ensureServerStarted(TinymistLspServerDescriptor(project, action.tinymistPath))
+                clientStarter.ensureClientStarted(TinymistLspServerDescriptor(project, action.tinymistPath))
             }
             LspStartAction.TriggerDownload -> {
                 log.info("Tinymist not found, triggering auto-download for file ${file.path}")
                 TinymistDownloadService.getInstance().downloadInBackground(project) { success ->
                     if (success) {
                         log.info("Tinymist downloaded successfully; requesting LSP (re)start")
-                        LspServerManager.getInstance(project).startServersIfNeeded<TinymistLspServerSupportProvider>()
+                        LspClientManager.getInstance(project).startClientsIfNeeded<TinymistLspServerSupportProvider>()
                     } else {
                         log.warn("Tinymist download failed; LSP server will not be started")
                         NotificationGroupManager.getInstance()

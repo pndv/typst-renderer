@@ -12,10 +12,10 @@ import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.platform.lsp.api.LspServer
-import com.intellij.platform.lsp.api.LspServerDescriptor
+import com.intellij.platform.lsp.api.LspClient
+import com.intellij.platform.lsp.api.LspClientDescriptor
+import com.intellij.platform.lsp.api.LspIntegrationProvider
 import com.intellij.platform.lsp.api.LspServerState
-import com.intellij.platform.lsp.api.LspServerSupportProvider
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -48,7 +48,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     // Note: A "typst file + no LSP server → false" test is not reliable here because the
     // IntelliJ platform's LSP bridge auto-registers a server for the Tinymist provider when
-    // a .typ file is opened in the test fixture, making findLspServer() return non-null.
+    // a .typ file is opened in the test fixture, making findLspClient() return non-null.
     // That branch is better covered by a Batch 3 integration test with a controllable LSP mock.
     fun testIsAvailable_whenNoVirtualFileInContext_returnsFalse() {
         val ctx = SimpleDataContext.builder()
@@ -215,7 +215,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
                     uri to listOf(TextEdit(Range(Position(0, 5), Position(0, 8)), "bar"))
                 )
             )
-            val fakeServer = FakeLspServer(
+            val fakeServer = FakeLspClient(
                 Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                     PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
                 ),
@@ -264,7 +264,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
                     )
                 ),
             )
-            val fakeServer = FakeLspServer(
+            val fakeServer = FakeLspClient(
                 Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                     PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
                 ),
@@ -286,7 +286,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     fun testRename_userCancelsDialog_noChangesApplied() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspServer(
+        val fakeServer = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -301,7 +301,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     fun testRename_prepareRenameReturnsNull_showsInfoNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspServer(null)
+        val fakeServer = FakeLspClient(null)
         TestDialogManager.setTestDialog(TestDialog.OK)
 
         handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
@@ -312,7 +312,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     fun testRename_renameRequestThrows_showsErrorNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspServer(
+        val fakeServer = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -329,7 +329,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     fun testRename_renameReturnsNullWorkspaceEdit_showsInfoNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspServer(
+        val fakeServer = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -350,7 +350,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         workspaceEdit.documentChanges = listOf(
             Either.forRight(RenameFile("file:///old.typ", "file:///new.typ")),
         )
-        val fakeServer = FakeLspServer(
+        val fakeServer = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -364,7 +364,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     fun testRename_sameNameEntered_treatedAsCancel() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspServer(
+        val fakeServer = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -379,10 +379,10 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 }
 
 /**
- * Test double for [LspServer]. Responses are consumed in call order.
+ * Test double for [LspClient]. Responses are consumed in call order.
  * Store a [Throwable] in [responses] to simulate a failed/timeout request.
  */
-private class FakeLspServer(private vararg val responses: Any?) : LspServer {
+private class FakeLspClient(private vararg val responses: Any?) : LspClient {
 
     var callCount = 0
         private set
@@ -397,10 +397,10 @@ private class FakeLspServer(private vararg val responses: Any?) : LspServer {
         return response as Lsp4jResponse?
     }
 
-    override val providerClass: Class<out LspServerSupportProvider>
+    override val providerClass: Class<out LspIntegrationProvider>
         get() = TinymistLspServerSupportProvider::class.java
     override val project: Project get() = throw UnsupportedOperationException()
-    override val descriptor: LspServerDescriptor get() = throw UnsupportedOperationException()
+    override val descriptor: LspClientDescriptor get() = throw UnsupportedOperationException()
     override val state: LspServerState get() = LspServerState.Running
     override val initializeResult: InitializeResult? get() = null
     override fun sendNotification(lsp4jSender: (org.eclipse.lsp4j.services.LanguageServer) -> Unit) {}

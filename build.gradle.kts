@@ -18,10 +18,11 @@ plugins {
 
 group = providers.gradleProperty("pluginGroup").get()
 version = providers.gradleProperty("pluginVersion").get()
+private val jdkVersion = providers.gradleProperty("jdkVersion").get().toInt()
 
 // Set the JVM language level used to build the project.
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(jdkVersion)
 }
 
 idea {
@@ -44,9 +45,6 @@ repositories {
 
 // Dependencies are managed with Gradle version catalogue - read more: https://docs.gradle.org/current/userguide/version_catalogs.html
 dependencies {
-//    testImplementation(platform(libs.junit.bom))
-//    testImplementation(libs.junit.jupiter.api)
-//    testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.junit4)
     testImplementation(libs.mockwebserver) {
         exclude(group = "org.jetbrains.kotlin")
@@ -117,7 +115,6 @@ intellijPlatform {
         certificateChainFile = file(".certs/chain.crt")
         privateKeyFile = file(".certs/private_encrypted.pem")
 */
-
         password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
 
         // **MUST** encode in base64 format before setting as environment variables
