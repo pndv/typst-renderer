@@ -263,8 +263,45 @@ tasks {
         }
     }
 
+    // Guards against silent drift between the `gradleVersion` source of truth in
+    // gradle.properties and the distribution pinned in gradle/wrapper/gradle-wrapper.properties.
+    // The Gradle bootstrap reads the wrapper file before any build script runs, so it cannot
+    // reference gradle.properties directly — the `wrapper` task above propagates the value, but
+    // only when run. This check fails the build if `gradleVersion` is bumped without re-running
+    // `./gradlew wrapper` and committing the regenerated wrapper.
+    val verifyGradleWrapperVersion = register("verifyGradleWrapperVersion") {
+        group = "verification"
+        description =
+            "Fails if gradle-wrapper.properties is out of sync with the `gradleVersion` pin in gradle.properties."
+        val expected = providers.gradleProperty("gradleVersion").get()
+        val wrapperProps = layout.projectDirectory.file("gradle/wrapper/gradle-wrapper.properties").asFile
+        outputs.upToDateWhen { false } // A verification gate should always run, never be skipped as up-to-date.
+        doLast {
+            if (!wrapperProps.exists()) {
+                throw GradleException(
+                    "gradle-wrapper.properties is missing at ${wrapperProps.path}. " +
+                        "Run `./gradlew wrapper` to regenerate it.",
+                )
+            }
+            val distributionUrl = wrapperProps.readLines().firstOrNull { it.startsWith("distributionUrl=") }
+                ?: throw GradleException("No distributionUrl entry found in ${wrapperProps.path}.")
+            // distributionUrl=...gradle-<version>-(bin|all).zip — version may itself contain
+            // hyphens (e.g. 8.5-rc-1), so capture non-greedily up to the -bin/-all suffix.
+            val actual = Regex("""gradle-(.+?)-(?:bin|all)\.zip""").find(distributionUrl)?.groupValues?.get(1)
+                ?: throw GradleException("Could not parse the Gradle version from: $distributionUrl")
+            if (actual != expected) {
+                throw GradleException(
+                    "gradle-wrapper.properties ($actual) is out of sync with the `gradleVersion` pin " +
+                        "($expected) in gradle.properties. Run `./gradlew wrapper` and commit " +
+                        "gradle/wrapper/gradle-wrapper.properties.",
+                )
+            }
+            logger.lifecycle("Gradle wrapper version matches the pin ($expected).")
+        }
+    }
+
     named("check") {
-        dependsOn(verifyPdfjsVendored)
+        dependsOn(verifyPdfjsVendored, verifyGradleWrapperVersion)
     }
 }
 
