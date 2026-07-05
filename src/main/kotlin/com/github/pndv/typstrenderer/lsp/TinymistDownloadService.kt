@@ -2,11 +2,14 @@ package com.github.pndv.typstrenderer.lsp
 
 import com.github.pndv.typstrenderer.TYPST_NOTIFICATION_GROUP_ID
 import com.github.pndv.typstrenderer.TypstBundle
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
@@ -147,9 +150,17 @@ class TinymistDownloadService {
     }
 
     private fun notifyError(project: Project?, message: String) {
-        NotificationGroupManager.getInstance()
-            .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
-            .createNotification(
+        val groupManager = NotificationGroupManager.getInstance()
+        val notificationGroup: NotificationGroup? = groupManager.getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
+        if (notificationGroup == null) {
+            val pluginId = PluginId.getId("com.github.pndv.typstrenderer")
+            val isPluginInstalledAndEnabled =
+                PluginManagerCore.isPluginInstalled(pluginId) && !PluginManagerCore.isDisabled(pluginId)
+            LOG.debug("notifyError: isPluginInstalledAndEnabled=$isPluginInstalledAndEnabled")
+            LOG.error("Notification group not found")
+            throw IllegalStateException("Notification group not found")
+        }
+        notificationGroup.createNotification(
                 TypstBundle.message("notification.tinymist.download.failed.title"),
                 message,
                 NotificationType.ERROR

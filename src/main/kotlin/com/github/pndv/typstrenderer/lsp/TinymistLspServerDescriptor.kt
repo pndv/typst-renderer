@@ -7,7 +7,7 @@ import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.platform.lsp.api.ProjectWideLspServerDescriptor
+import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 import com.intellij.platform.lsp.api.customization.LspCustomization
 import com.intellij.platform.lsp.api.customization.LspFormattingSupport
 import com.intellij.platform.lsp.api.customization.LspSemanticTokensSupport
@@ -16,7 +16,7 @@ import java.nio.file.Path
 
 class TinymistLspServerDescriptor(
     project: Project, private val tinymistPath: String
-) : ProjectWideLspServerDescriptor(project, "Tinymist") {
+) : ProjectWideLspClientDescriptor(project, "Tinymist") {
     private val log = logger<TinymistLspServerDescriptor>()
 
     /**

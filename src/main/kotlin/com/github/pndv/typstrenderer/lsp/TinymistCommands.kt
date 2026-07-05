@@ -1,18 +1,14 @@
 package com.github.pndv.typstrenderer.lsp
 
 import com.github.pndv.typstrenderer.TypstBundle
-import com.github.pndv.typstrenderer.lsp.TinymistCommands.buildExportPdfParams
-import com.github.pndv.typstrenderer.lsp.TinymistCommands.buildGetServerInfoParams
-import com.github.pndv.typstrenderer.lsp.TinymistCommands.buildPinMainParams
-import com.github.pndv.typstrenderer.lsp.TinymistCommands.exportPdf
 import com.google.gson.JsonNull
 import com.google.gson.JsonPrimitive
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
-import com.intellij.platform.lsp.api.LspServer
-import com.intellij.platform.lsp.api.LspServerManager
+import com.intellij.platform.lsp.api.LspClient
+import com.intellij.platform.lsp.api.LspClientManager
 import com.intellij.platform.lsp.api.LspServerState
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import org.eclipse.lsp4j.ExecuteCommandParams
@@ -45,8 +41,8 @@ internal sealed interface ExportPdfResult {
 /**
  * Thin wrappers around tinymist's `workspace/executeCommand` surface.
  *
- * Each public entry-point locates the running tinymist `LspServer` via
- * `LspServerManager`, then routes through [LspServer.sendRequestSync]. Transport
+ * Each public entry-point locates the running tinymist `LspClient` via
+ * `LspClientManager`, then routes through [LspClient.sendRequestSync]. Transport
  * failures (server not attached, timeout, server detached mid-flight) collapse to
  * a sentinel per the LSP module's contract — no exceptions to handle at the call
  * site. A *server-side* export rejection is different: tinymist returns it as a
@@ -99,7 +95,7 @@ internal object TinymistCommands {
      */
     @RequiresBackgroundThread
     fun exportPdf(project: Project, source: Path): ExportPdfResult {
-        val server = getServer(project) ?: run {
+        val server = getClient(project) ?: run {
             log.debug { "exportPdf: no tinymist LSP attached for project ${project.name}" }
             return ExportPdfResult.Unavailable
         }
@@ -296,7 +292,7 @@ internal object TinymistCommands {
      */
     @RequiresBackgroundThread
     fun pinMain(project: Project, mainPath: Path?) {
-        val server = getServer(project) ?: return
+        val server = getClient(project) ?: return
         server.sendRequestSync { server4j ->
             server4j.workspaceService.executeCommand(buildPinMainParams(mainPath))
         }
@@ -309,7 +305,7 @@ internal object TinymistCommands {
      */
     @RequiresBackgroundThread
     fun getServerInfo(project: Project): Any? {
-        val server = getServer(project) ?: return null
+        val server = getClient(project) ?: return null
         return server.sendRequestSync { server4j ->
             server4j.workspaceService.executeCommand(buildGetServerInfoParams())
         }
@@ -317,14 +313,13 @@ internal object TinymistCommands {
 
     /** Returns `True` only when a tinymist server is attached AND finished initialising. */
     fun isServerReady(project: Project): Boolean {
-        val server = getServer(project) ?: return false
+        val server = getClient(project) ?: return false
         return server.state == LspServerState.Running
     }
 
-    private fun getServer(project: Project): LspServer? {
+    private fun getClient(project: Project): LspClient? {
         if (project.isDisposed) return null
-        return LspServerManager.getInstance(project)
-            .getServersForProvider(TinymistLspServerSupportProvider::class.java)
+        return LspClientManager.getInstance(project).getClients(TinymistLspServerSupportProvider::class.java)
             .firstOrNull()
     }
 }

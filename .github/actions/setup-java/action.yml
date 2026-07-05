@@ -5,8 +5,15 @@ runs:
   using: composite
   steps:
 
+    - name: Read JDK version from gradle.properties
+      id: jdk-version
+      shell: bash
+      run: |
+        version=$(awk -F= '/^jdkVersion[[:space:]]*=/ { gsub(/[[:space:]]/, "", $2); print $2 }' gradle.properties)
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
     - name: Setup Java
       uses: actions/setup-java@v5
       with:
         distribution: zulu
-        java-version: 25
+        java-version: ${{ steps.jdk-version.outputs.version }}

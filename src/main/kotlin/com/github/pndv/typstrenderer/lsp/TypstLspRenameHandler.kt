@@ -13,8 +13,8 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.ide.progress.runWithModalProgressBlocking
-import com.intellij.platform.lsp.api.LspServer
-import com.intellij.platform.lsp.api.LspServerManager
+import com.intellij.platform.lsp.api.LspClient
+import com.intellij.platform.lsp.api.LspClientManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.refactoring.rename.RenameHandler
@@ -58,7 +58,7 @@ class TypstLspRenameHandler : RenameHandler {
         project: Project,
         editor: Editor,
         virtualFile: VirtualFile,
-        server: LspServer,
+        server: LspClient,
     ) {
         val offset = editor.caretModel.offset
         val position = offsetToLspPosition(editor.document, offset)
@@ -148,9 +148,9 @@ class TypstLspRenameHandler : RenameHandler {
 
     // ---- Internal helpers ----
 
-    private fun findLspServer(project: Project): LspServer? {
-        val manager = LspServerManager.getInstance(project)
-        val servers = manager.getServersForProvider(TinymistLspServerSupportProvider::class.java)
+    private fun findLspServer(project: Project): LspClient? {
+        val manager = LspClientManager.getInstance(project)
+        val servers = manager.getClients(TinymistLspServerSupportProvider::class.java)
         return servers.firstOrNull()
     }
 

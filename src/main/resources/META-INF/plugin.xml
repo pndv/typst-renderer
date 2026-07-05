@@ -31,7 +31,7 @@
                         implementationClass="com.github.pndv.typstrenderer.language.TypstCommenter"/>
 
         <!-- LSP support via tinymist -->
-        <platform.lsp.serverSupportProvider
+        <platform.lsp.integrationProvider
                 implementation="com.github.pndv.typstrenderer.lsp.TinymistLspServerSupportProvider"/>
 
         <!-- Rename via LSP (IntelliJ's LSP module does not support textDocument/rename) -->
