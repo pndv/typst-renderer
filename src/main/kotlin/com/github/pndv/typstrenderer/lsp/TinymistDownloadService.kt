@@ -154,10 +154,9 @@ class TinymistDownloadService {
         val notificationGroup: NotificationGroup? = groupManager.getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
         if (notificationGroup == null) {
             val pluginId = PluginId.getId("com.github.pndv.typstrenderer")
-            val plugin = PluginManagerCore.getPlugin(pluginId)
-            val bool = plugin != null
-            LOG.warn("pluginLoaded=$bool")
-
+            val isPluginInstalledAndEnabled =
+                PluginManagerCore.isPluginInstalled(pluginId) && !PluginManagerCore.isDisabled(pluginId)
+            LOG.debug("notifyError: isPluginInstalledAndEnabled=$isPluginInstalledAndEnabled")
             LOG.error("Notification group not found")
             throw IllegalStateException("Notification group not found")
         }
