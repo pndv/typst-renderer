@@ -11,15 +11,6 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Typst file type -->
-        <!--
-                <fileType
-                        name="Typst"
-                        implementationClass="com.github.pndv.typstrenderer.language.TypstFileType"
-                        fieldName="INSTANCE"
-                        language="Typst"
-                        extensions="typ"/>
-        -->
-
         <fileType
                 name="Typst"
                 implementationClass="com.github.pndv.typstrenderer.language.TypstFileType"
