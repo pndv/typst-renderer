@@ -63,17 +63,24 @@ class TinymistLspServerDescriptor(
      * the preview loop. Phase C of the typst-CLI retirement flips this to `"onSave"` and
      * deletes the subprocess.
      *
+     * `formatterProseWrap` is on because typstyle's default (`false`) makes it return zero
+     * edits for over-long prose lines — Reformat Code then looks like a dead action on
+     * prose-heavy documents (issue #88). With it on, prose reflows to typstyle's print
+     * width (default 120). See docs/issue-88-autoformat-diagnosis.md for the evidence.
+     *
      * The export directory is read at LSP init, so the project settings page restarts the
      * server when it changes — same pattern as the project-root and font-path overrides.
      */
     override fun createInitializationOptions(): Any {
         val exportPath = TypstProjectSettingsState.getInstance(project).typstExportPath
         val outputPath = buildOutputPathTemplate(exportPath)
-        log.debug { "tinymist initializationOptions outputPath: $outputPath" }
-        return mapOf(
+        val options = mapOf(
             "outputPath" to outputPath,
             "exportPdf" to "never",
+            "formatterProseWrap" to true,
         )
+        log.debug { "tinymist initializationOptions: $options" }
+        return options
     }
 
     override fun createCommandLine(): GeneralCommandLine {
