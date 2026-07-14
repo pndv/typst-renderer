@@ -290,7 +290,6 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - "Typst Output" tool window for viewing compilation output
 
 [Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.2...HEAD
-
 [0.4.2]: https://github.com/pndv/typst-renderer/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/pndv/typst-renderer/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/pndv/typst-renderer/compare/0.3.0...0.4.0
