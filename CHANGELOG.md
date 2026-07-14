@@ -4,6 +4,29 @@
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-13
+
+A maintenance release: auto-format now works on prose-heavy documents, and the plugin is compatible with the 2026.2
+line following the migration to the platform's `LspClient` integration API.
+
+### Fixed
+
+- **Reformat Code** no longer looks like a dead action on prose-heavy documents. tinymist's `formatterProseWrap`
+  option is now enabled, so over-long prose lines reflow to typstyle's print width instead of returning zero edits
+  (issue #88).
+
+### Changed
+
+- Migrated the LSP integration from the platform's `LspServer` API to the newer `LspClient` /
+  `LspIntegrationProvider` API. This lifts the 0.4.1 compatibility pin: the supported build range is now
+  `261`–`262.*`, so the plugin runs on the 2026.2 line.
+- Debug logging of tinymist's initialisation options now records the full options map for easier traceability.
+
+### Infrastructure
+
+- The GitHub workflows now derive the JDK version from `gradle.properties` instead of hard-coding it.
+- Gradle updated to 9.6.1 and the IntelliJ Platform Gradle plugin to 2.17.0, alongside routine dependency bumps.
+
 ## [0.4.1] - 2026-06-19
 
 A maintenance release: bug fixes, responsiveness improvements, and removal of the unwired typst CLI code that
@@ -266,7 +289,9 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.1...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.2...HEAD
+
+[0.4.2]: https://github.com/pndv/typst-renderer/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/pndv/typst-renderer/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/pndv/typst-renderer/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/pndv/typst-renderer/compare/0.2.0...0.3.0
