@@ -28,7 +28,7 @@ internal object PdfjsEndpoints {
     /** Plugin-private namespace prefix on the built-in server. */
     const val NAMESPACE = "typst-renderer-7f3a9c12"
 
-    /** Returns the full http://localhost:PORT/NAMESPACE base URL for the current IDE run. */
+    /** Returns the full `http://localhost:PORT/NAMESPACE` base URL for the current IDE run. */
     fun baseUrl(): String {
         val port = BuiltInServerManager.getInstance().port
         return "http://localhost:$port/$NAMESPACE"

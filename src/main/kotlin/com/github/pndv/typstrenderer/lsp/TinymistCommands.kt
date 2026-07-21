@@ -7,6 +7,7 @@ import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.platform.lsp.api.LspClient
 import com.intellij.platform.lsp.api.LspClientManager
 import com.intellij.platform.lsp.api.LspServerState
@@ -95,8 +96,8 @@ internal object TinymistCommands {
      */
     @RequiresBackgroundThread
     fun exportPdf(project: Project, source: Path): ExportPdfResult {
-        val server = getClient(project) ?: run {
-            log.debug { "exportPdf: no tinymist LSP attached for project ${project.name}" }
+        val server = getClient(project, source) ?: run {
+            log.debug { "exportPdf: no tinymist LSP attached for $source in project ${project.name}" }
             return ExportPdfResult.Unavailable
         }
         try {
@@ -292,7 +293,7 @@ internal object TinymistCommands {
      */
     @RequiresBackgroundThread
     fun pinMain(project: Project, mainPath: Path?) {
-        val server = getClient(project) ?: return
+        val server = getClient(project, mainPath) ?: return
         server.sendRequestSync { server4j ->
             server4j.workspaceService.executeCommand(buildPinMainParams(mainPath))
         }
@@ -311,15 +312,32 @@ internal object TinymistCommands {
         }
     }
 
-    /** Returns `True` only when a tinymist server is attached AND finished initialising. */
-    fun isServerReady(project: Project): Boolean {
-        val server = getClient(project) ?: return false
+    /**
+     * Returns `True` only when a tinymist server that claims [source] is attached AND
+     * finished initialising. With the project-wide and external-file clients coexisting,
+     * "some server is running" is not enough — the readiness poll must wait for the one
+     * that will actually take the export.
+     */
+    fun isServerReady(project: Project, source: Path): Boolean {
+        val server = getClient(project, source) ?: return false
         return server.state == LspServerState.Running
     }
 
-    private fun getClient(project: Project): LspClient? {
+    /**
+     * Locates the tinymist client responsible for [source].
+     *
+     * The project-wide client claims in-content files; an external-file client claims the
+     * `.typ` files under its folder root — the descriptors' `isSupportedFile` predicates
+     * partition the space, so at most one client claims any given file. When [source] is
+     * `null` or unresolvable in the VFS the first client is returned (info-level commands
+     * that are not file-scoped); when no client claims a resolvable [source], `null` is
+     * returned rather than mis-routing the request to a client rooted elsewhere.
+     */
+    private fun getClient(project: Project, source: Path? = null): LspClient? {
         if (project.isDisposed) return null
-        return LspClientManager.getInstance(project).getClients(TinymistLspServerSupportProvider::class.java)
-            .firstOrNull()
+        val clients = LspClientManager.getInstance(project).getClients(TinymistLspServerSupportProvider::class.java)
+        if (source == null) return clients.firstOrNull()
+        val file = LocalFileSystem.getInstance().findFileByNioFile(source) ?: return clients.firstOrNull()
+        return clients.firstOrNull { it.descriptor.isSupportedFile(file) }
     }
 }

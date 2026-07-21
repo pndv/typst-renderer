@@ -4,6 +4,33 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The live PDF preview no longer crashes with `NoClassDefFoundError: com/intellij/ui/jcef/JBCefApp`
+  on the 2026.2 line. From build 262 the platform ships JCEF as a separate bundled plugin (`com.intellij.modules.jcef`)
+  that is no longer on every plugin's classpath by default; the plugin now declares a dependency on it so the embedded
+  browser previewer loads.
+
+- `.typ` files opened from **outside the project** (a résumé in the home directory, a one-off letter on another drive)
+  now get a language server, so compile and the live preview work for them. The platform only lets a plugin start an LSP
+  for files inside the project's content roots; such files now get their own tinymist client rooted at the file's
+  folder, started explicitly on editor open and swept up at project startup. The exported PDF lands in the configured
+  export directory (default `target/`) next to the file (issue #92).
+
+### Changed
+
+- The minimum supported build is now `262` (2026.2); the supported range is `262.*`. The 2026.1 (`261`)
+  line is no longer supported — the JCEF split that broke the preview only exists from 262, and pinning the baseline
+  there keeps the plugin descriptor honest.
+
+### Infrastructure
+
+- Six extension-dependent integration tests are now gated behind a plugin-loaded check. The minimal 2026.2 test
+  framework omits `intellij.libraries.lucene.common`, which excludes the plugin from plugin-set resolution so its
+  extensions never register; the affected tests skip with a logged reason on that platform and run in full again once a
+  complete test framework ships. The real IDE is unaffected — the JetBrains Plugin Verifier reports the plugin
+  compatible with `IU-262.8665.258`.
+
 ## [0.4.2] - 2026-07-13
 
 A maintenance release: auto-format now works on prose-heavy documents, and the plugin is compatible with the 2026.2
@@ -38,7 +65,7 @@ A maintenance release: bug fixes, responsiveness improvements, and removal of th
   buffered and flushed in order once the console becomes available, so a freshly-opened project keeps its first
   compile's diagnostics.
 - **Rename** (`prepareRename`/`rename`) no longer blocks the EDT on the tinymist round-trip. The requests run off the
-  EDT under a cancellable modal progress, and cancelling the dialog aborts quietly instead of being reported as a
+  EDT under a cancellable modal progress, and cancelling the dialogue aborts quietly instead of being reported as a
   failure.
 - Exceptions thrown during a PDF export are now surfaced to the preview pane instead of escaping unhandled;
   `ProcessCanceledException` is always re-thrown.

@@ -9,6 +9,7 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 class MyPluginTest : BasePlatformTestCase() {
 
     fun testTypstFileTypeRegistered() {
+        if (!pluginRegisteredInTestPlatform()) return
         val file = myFixture.configureByText("test.typ", "#let foo = 1")
         assertEquals(TypstFileType, file.virtualFile.fileType)
     }
@@ -25,6 +26,7 @@ class MyPluginTest : BasePlatformTestCase() {
     }
 
     fun testTypstCommenter() {
+        if (!pluginRegisteredInTestPlatform()) return
         val commenter = LanguageCommenters.INSTANCE.forLanguage(TypstLanguage.INSTANCE)
         assertNotNull(commenter)
         assertEquals("//", commenter!!.lineCommentPrefix)
@@ -33,6 +35,7 @@ class MyPluginTest : BasePlatformTestCase() {
     }
 
     fun testTypstPsiFileLanguage() {
+        if (!pluginRegisteredInTestPlatform()) return
         val psiFile = myFixture.configureByText("test.typ", "#let foo = 1")
         // With the ParserDefinition, the PsiFile should be a TypstFile backed by TypstLanguage
         assertInstanceOf(psiFile, TypstFile::class.java)
@@ -40,6 +43,7 @@ class MyPluginTest : BasePlatformTestCase() {
     }
 
     fun testTypstCommenterViaFile() {
+        if (!pluginRegisteredInTestPlatform()) return
         // Verify that commenter is found when looking up by the PsiFile's language
         // (this is the real code path used by Ctrl+/ — not the direct LanguageCommenters lookup)
         val psiFile = myFixture.configureByText("test.typ", "#let foo = 1")

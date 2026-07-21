@@ -6,6 +6,11 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lsp</depends>
+    <!-- JCEF is a separate bundled plugin from 2026.2 (build 262) onwards; the embedded PDF
+         preview (TypstFilePreviewer) needs com.intellij.ui.jcef.* and org.cef.* from it. Without
+         this dependency the plugin classloader cannot see JBCefApp and the previewer dies with a
+         NoClassDefFoundError on 262. -->
+    <depends>com.intellij.modules.jcef</depends>
 
     <resource-bundle>messages.TypstBundle</resource-bundle>
 
@@ -33,6 +38,12 @@
         <!-- LSP support via tinymist -->
         <platform.lsp.integrationProvider
                 implementation="com.github.pndv.typstrenderer.lsp.TinymistLspServerSupportProvider"/>
+
+        <!-- LSP for .typ files outside the project content roots: the platform gates the
+             integrationProvider's fileOpened on ProjectFileIndex.isInContent, so standalone
+             documents need their own startup sweep (see TypstExternalFileLspStarter). -->
+        <postStartupActivity
+                implementation="com.github.pndv.typstrenderer.lsp.TypstExternalFileLspStartupActivity"/>
 
         <!-- Rename via LSP (IntelliJ's LSP module does not support textDocument/rename) -->
         <renameHandler implementation="com.github.pndv.typstrenderer.lsp.TypstLspRenameHandler"
@@ -72,6 +83,13 @@
         <httpRequestHandler
                 implementation="com.github.pndv.typstrenderer.editor.PdfjsPreviewServer"/>
     </extensions>
+
+    <projectListeners>
+        <!-- Editor-open hook for out-of-content .typ files — the platform's own LSP
+             file-open dispatch never reaches the integrationProvider for them. -->
+        <listener class="com.github.pndv.typstrenderer.lsp.TypstExternalFileLspStarter"
+                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+    </projectListeners>
 
     <actions>
         <action id="Typst.Compile"

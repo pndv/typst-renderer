@@ -9,6 +9,7 @@ class TypstBundleTest : BasePlatformTestCase() {
     }
 
     fun testActionTextResolution() {
+        if (!pluginRegisteredInTestPlatform()) return
         val actionManager = com.intellij.openapi.actionSystem.ActionManager.getInstance()
 
         val compileAction = actionManager.getAction("Typst.Compile")
