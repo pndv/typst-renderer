@@ -4,13 +4,14 @@
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-21
+
 ### Fixed
 
 - The live PDF preview no longer crashes with `NoClassDefFoundError: com/intellij/ui/jcef/JBCefApp`
   on the 2026.2 line. From build 262 the platform ships JCEF as a separate bundled plugin (`com.intellij.modules.jcef`)
   that is no longer on every plugin's classpath by default; the plugin now declares a dependency on it so the embedded
   browser previewer loads.
-
 - `.typ` files opened from **outside the project** (a résumé in the home directory, a one-off letter on another drive)
   now get a language server, so compile and the live preview work for them. The platform only lets a plugin start an LSP
   for files inside the project's content roots; such files now get their own tinymist client rooted at the file's
@@ -316,8 +317,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.2...HEAD
-
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.3...HEAD
+[0.4.3]: https://github.com/pndv/typst-renderer/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/pndv/typst-renderer/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/pndv/typst-renderer/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/pndv/typst-renderer/compare/0.3.0...0.4.0
