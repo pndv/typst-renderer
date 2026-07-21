@@ -393,7 +393,11 @@ class TypstFilePreviewer(
 
     private fun exportWhenReady(pollCount: Int) {
         if (project.isDisposed || !file.isValid) return
-        val isReady = decideExportReadiness(TinymistCommands.isServerReady(project), pollCount, MAX_SERVER_POLLS)
+        val isReady = decideExportReadiness(
+            TinymistCommands.isServerReady(
+                project, Path.of(file.path)
+            ), pollCount, MAX_SERVER_POLLS
+        )
         when (isReady) {
             ExportReadiness.Export -> runExport(attempt = 0)
 
@@ -483,8 +487,9 @@ class TypstFilePreviewer(
      * silently behind it.
      */
     private fun handleUnavailable(attempt: Int) {
-        when (val decision =
-            decideUnavailableAction(TinymistCommands.isServerReady(project), attempt, MAX_EXPORT_RETRIES)) {
+        when (val decision = decideUnavailableAction(
+            TinymistCommands.isServerReady(project, Path.of(file.path)), attempt, MAX_EXPORT_RETRIES
+        )) {
             UnavailableAction.PollForServer -> scheduleExportWhenReady()
 
             is UnavailableAction.Retry -> {

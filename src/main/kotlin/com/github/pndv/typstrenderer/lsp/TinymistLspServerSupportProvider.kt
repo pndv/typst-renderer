@@ -39,6 +39,16 @@ internal fun decideLspAction(
     else -> LspStartAction.TriggerDownload
 }
 
+/**
+ * Starts the project-wide tinymist client when a `.typ` file inside the project's content
+ * roots is opened, downloading the binary first when it is missing.
+ *
+ * The platform only calls [fileOpened] for files that pass `ProjectFileIndex.isInContent`
+ * (and `startClientsIfNeeded` below applies the same filter), so this provider structurally
+ * never sees a `.typ` file opened from outside the project. Those are handled by
+ * [TypstExternalFileLspStarter], which starts a folder-rooted client through the public
+ * `LspClientManager.ensureClientStarted` API instead.
+ */
 class TinymistLspServerSupportProvider : LspIntegrationProvider {
 
     override fun fileOpened(

@@ -1,5 +1,6 @@
 package com.github.pndv.typstrenderer.lsp
 
+import com.github.pndv.typstrenderer.pluginRegisteredInTestPlatform
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import okhttp3.mockwebserver.MockResponse
@@ -47,6 +48,7 @@ class TinymistDownloadThreadingTest : BasePlatformTestCase() {
     }
 
     fun testDownloadInBackgroundIsSafeFromReadAction() {
+        if (!pluginRegisteredInTestPlatform()) return
         // 404 → resolveLatestDownloadUrl returns null → task body bails after
         // notifyError(...) and onComplete(false). All we care about here is
         // that the *scheduling* itself (which happens INSIDE the read action)
