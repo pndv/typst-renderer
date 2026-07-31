@@ -54,7 +54,6 @@ class TinymistManager {
         fun isWindows(): Boolean = osName?.lowercase()?.contains("win") ?: false
         fun isMacOS(): Boolean = osName?.lowercase()?.contains("mac") ?: false
         fun isLinux(): Boolean = osName?.lowercase()?.contains("linux") ?: false
-        fun isArm64(): Boolean = osArch?.let { it == "aarch64" || it == "arm64" } ?: false
 
         /**
          * Determines the GitHub release asset name for tinymist on the current platform.
@@ -70,9 +69,8 @@ class TinymistManager {
          *
          * On Unix, [File.canExecute] checks the executable permission bit.
          * On Windows, [File.canExecute] returns true for any readable file with certain
-         * extensions, so we additionally verify the file has a recognized executable extension.
-         */
-        /**
+         * extensions, so we additionally verify the file has a recognised executable extension.
+         *
          * Pure-function core of the 3-stage binary resolution fallback.
          * The instance method [resolveTinymistPath] is a thin wrapper that
          * supplies the real settings, PATH lookup, and downloaded file.

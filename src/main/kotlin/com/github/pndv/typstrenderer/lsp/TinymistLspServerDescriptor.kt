@@ -12,6 +12,7 @@ import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.LspClientDescriptor
+import com.intellij.platform.lsp.api.LspServerListener
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 import com.intellij.platform.lsp.api.customization.LspCustomization
 import com.intellij.platform.lsp.api.customization.LspFormattingSupport
@@ -43,6 +44,13 @@ class TinymistLspServerDescriptor(
     )
 
     override fun createInitializationOptions(): Any = buildTinymistInitializationOptions(project, log)
+
+    // Re-pin the configured main entry (tinymist.pinMain) each time this project-wide
+    // server finishes initialising. The pin is runtime-only on the tinymist side, so it
+    // must be replayed on every attach; a descriptor-owned LspServerListener is the stable
+    // public hook for that (LspClientManager.addListener is @ApiStatus.Internal).
+    // Verified firing on 2026.2/262 — the platform reads this property once per server start.
+    override val lspServerListener: LspServerListener = TypstMainFilePinServerListener(project)
 
     override fun createCommandLine(): GeneralCommandLine {
         log.debug { "Creating Tinymist LSP command line" }

@@ -75,7 +75,9 @@ internal object TinymistCommands {
      */
     internal fun buildPinMainParams(mainPath: Path?): ExecuteCommandParams {
         val arg: Any = mainPath?.toAbsolutePath()?.toString() ?: JsonNull.INSTANCE
-        return ExecuteCommandParams("tinymist.pinMain", listOf(arg))
+        val arguments = listOf(arg)
+        log.debug("pinMain arg: $arg. Will execute command: `tinymist.pinMain $arguments`")
+        return ExecuteCommandParams("tinymist.pinMain", arguments)
     }
 
     internal fun buildGetServerInfoParams(): ExecuteCommandParams =
@@ -100,6 +102,7 @@ internal object TinymistCommands {
             log.debug { "exportPdf: no tinymist LSP attached for $source in project ${project.name}" }
             return ExportPdfResult.Unavailable
         }
+        refreshEntryForExternalFile(server, source)
         try {
             val outcome = server.sendRequestSync { server4j ->
                 val exportPdfParams = buildExportPdfParams(source)
@@ -192,7 +195,10 @@ internal object TinymistCommands {
      */
     internal fun formatExportError(rawMessage: String): String {
         val payload = extractQuotedPayload(rawMessage) ?: return rawMessage
-        return unescapeRustDebug(payload)
+        val error = unescapeRustDebug(payload)
+
+        log.debug("rawMessage:\n$rawMessage\nformatted error:\n$error")
+        return error
     }
 
     /** Returns the text between the first and last double-quote, or `null` if there isn't a pair. */
@@ -284,6 +290,34 @@ internal object TinymistCommands {
         return responseError?.message?.takeIf { it.isNotBlank() } ?: cause.message ?: cause.toString()
     }
 
+
+    /**
+     * Makes tinymist re-read [source] from disk before exporting it — external-file client only.
+     *
+     * A `.typ` file outside the project content roots never receives `textDocument/didOpen` or
+     * `didChange` (issue #100): the platform gates document sync on `isInContent`. tinymist
+     * therefore reads such a file once, caches it, and — measurably — never re-reads it, so a
+     * saved edit produces a *successful* export of the **previous** content, with no recompile
+     * logged. Reproduced in isolation with a long-lived server: edit on disk → export → same page
+     * count; then `pinMain` → export → the new page appears. Not filesystem-specific; a plain temp
+     * directory behaves the same as a synced one.
+     *
+     * Pinning the file as that client's entry is also what it should have been all along — the
+     * external client is rooted at the file's own folder and starts with `main: None`, so it is
+     * the entry, and nothing had ever said so.
+     *
+     * Restricted to [TinymistExternalFileLspServerDescriptor]: in-content files are kept current
+     * by the platform's own document sync, and pinning one here would fight the user's configured
+     * main entry (#97).
+     */
+    private fun refreshEntryForExternalFile(client: LspClient, source: Path) {
+        if (client.descriptor !is TinymistExternalFileLspServerDescriptor) return
+        log.debug { "Re-pinning $source on the external-file client so tinymist re-reads it from disk" }
+        client.sendRequestSync { server4j ->
+            server4j.workspaceService.executeCommand(buildPinMainParams(source))
+        }
+    }
+
     /**
      * Pins the LSP's compile entry to [mainPath], overriding the focused-file
      * default. Pass `null` to unpin and revert to focused-file behaviour.
@@ -328,16 +362,47 @@ internal object TinymistCommands {
      *
      * The project-wide client claims in-content files; an external-file client claims the
      * `.typ` files under its folder root — the descriptors' `isSupportedFile` predicates
-     * partition the space, so at most one client claims any given file. When [source] is
-     * `null` or unresolvable in the VFS the first client is returned (info-level commands
-     * that are not file-scoped); when no client claims a resolvable [source], `null` is
-     * returned rather than mis-routing the request to a client rooted elsewhere.
+     * partition the space, so at most one client claims any given file.
+     *
+     * A `null` [source] means a file-agnostic command (`getServerInfo`); any client will do.
+     * Otherwise the contract is strict: return a client only when it *claims* [source] **and**
+     * is `Running`, and `null` in every other case — never a client picked for lack of a better
+     * option. Guessing is what produced the "file not found (searched at …)" reports: a request
+     * for a `C:\…` file was handed to a client rooted on `D:\`, which cannot resolve it.
+     * `null` maps to [ExportPdfResult.Unavailable], which callers already handle by polling
+     * until the right client appears.
      */
     private fun getClient(project: Project, source: Path? = null): LspClient? {
         if (project.isDisposed) return null
-        val clients = LspClientManager.getInstance(project).getClients(TinymistLspServerSupportProvider::class.java)
+        val clients =
+            LspClientManager.getInstance(project)
+                .getClients(TinymistLspServerSupportProvider::class.java) // File-agnostic commands (getServerInfo) have no file to route by; any client answers.
         if (source == null) return clients.firstOrNull()
-        val file = LocalFileSystem.getInstance().findFileByNioFile(source) ?: return clients.firstOrNull()
-        return clients.firstOrNull { it.descriptor.isSupportedFile(file) }
+
+        // Plain findFileByNioFile is a non-refreshing lookup: it only sees what the VFS already
+        // knows. A file created or replaced outside the IDE therefore misses, which is how a
+        // deleted-and-recreated document ended up routed to a client rooted on another drive
+        // (reported as "file not found (searched at …)"). Fall back to a refreshing lookup —
+        // legal here because every caller is @RequiresBackgroundThread — so the file is found
+        // rather than the client guessed.
+        val localFs = LocalFileSystem.getInstance()
+        val file = localFs.findFileByNioFile(source) ?: localFs.refreshAndFindFileByNioFile(source)
+        if (file == null) {
+            log.debug { "getClient: $source is not in the VFS even after refresh; no client can be chosen" }
+            return null
+        }
+
+        val claimed = clients.firstOrNull { it.descriptor.isSupportedFile(file) }
+        if (claimed == null) {
+            log.debug { "getClient: no tinymist client claims ${file.path} (${clients.size} running)" }
+            return null
+        } // A client that has not finished `initialize` has no usable root or entry yet; sending it
+        // a file-scoped command yields a spurious failure. Report "no client" instead so the
+        // caller's readiness poll waits for this one to come up.
+        if (claimed.state != LspServerState.Running) {
+            log.debug { "getClient: client for ${file.path} is ${claimed.state}, not Running; treating as unavailable" }
+            return null
+        }
+        return claimed
     }
 }

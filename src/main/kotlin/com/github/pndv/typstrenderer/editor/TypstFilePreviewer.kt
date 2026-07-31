@@ -3,13 +3,13 @@ package com.github.pndv.typstrenderer.editor
 import com.github.pndv.typstrenderer.Common.printToConsole
 import com.github.pndv.typstrenderer.TYPST_OUTPUT_TOOL_WINDOW_ID
 import com.github.pndv.typstrenderer.TypstBundle
-import com.github.pndv.typstrenderer.lsp.ExportPdfResult
-import com.github.pndv.typstrenderer.lsp.TinymistCommands
+import com.github.pndv.typstrenderer.lsp.*
 import com.github.pndv.typstrenderer.settings.TypstSettingsState
 import com.github.pndv.typstrenderer.theme.TypstThemeListener
 import com.github.pndv.typstrenderer.theme.TypstThemeService
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
@@ -41,7 +41,6 @@ import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
 import java.beans.PropertyChangeListener
 import java.io.File
-import java.nio.file.Path
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.swing.JComponent
@@ -147,6 +146,15 @@ class TypstFilePreviewer(
     @Volatile
     private var outputPdf: File? = null
 
+    /**
+     * Whether the compile-error pane is currently on screen. Keeps [showWaitingPageIfNoRender]
+     * from replacing a visible error with the "Compiling…" splash before a PDF has ever
+     * rendered — otherwise a post-failure readiness poll leaves the pane stuck on "Compiling…"
+     * with the real diagnostic no longer visible. Cleared once an export succeeds.
+     */
+    @Volatile
+    private var showingError: Boolean = false
+
     @Volatile
     private var reloadJob: ScheduledFuture<*>? = null
 
@@ -190,6 +198,7 @@ class TypstFilePreviewer(
             installLoadEndHandlers()
             listenForThemeChanges()
             listenForFileChanges()
+            listenForPinChanges()
 
             // Show a placeholder, then kick off the first export so the panel
             // populates without waiting for the user to save.
@@ -395,7 +404,7 @@ class TypstFilePreviewer(
         if (project.isDisposed || !file.isValid) return
         val isReady = decideExportReadiness(
             TinymistCommands.isServerReady(
-                project, Path.of(file.path)
+                project, resolveTypstExportTarget(project, file)
             ), pollCount, MAX_SERVER_POLLS
         )
         when (isReady) {
@@ -403,7 +412,10 @@ class TypstFilePreviewer(
 
             is ExportReadiness.Poll -> {
                 val delayMs = backoffDelayMs(isReady.nextPollCount, INITIAL_SERVER_POLL_MS, MAX_SERVER_POLL_MS)
-                log.debug { "[preview] tinymist not ready; poll ${isReady.nextPollCount} of $MAX_SERVER_POLLS in ${delayMs}ms for ${file.path}" }
+                log.debug { "[preview] tinymist not ready; poll ${isReady.nextPollCount} of $MAX_SERVER_POLLS in ${delayMs}ms for ${file.path}" } // Polling alone never recovers a client that died or was stopped — nothing else
+                // restarts one. Ask for a restart on each poll (idempotent, and the backoff keeps
+                // it rare) so a crashed server self-heals instead of wedging the preview.
+                recoverTypstLspForFile(project, file)
                 showWaitingPageIfNoRender()
                 exportJob = reloadExecutor.schedule(
                     { exportWhenReady(isReady.nextPollCount) },
@@ -445,12 +457,20 @@ class TypstFilePreviewer(
         try {
             if (project.isDisposed || !file.isValid) return
 
-            log.debug { "[preview] exporting ${file.path} via tinymist" }
-            val result = TinymistCommands.exportPdf(project, Path.of(file.path))
-            log.debug { "[preview] export result for ${file.path}: $result" }
+            // When a main entry is pinned, export it rather than the focused file:
+            // tinymist.exportPdf compiles exactly the path it is given and ignores the
+            // pin, so a chapter would otherwise still be compiled standalone and report
+            // undefined cross-file references (see resolveTypstExportTarget).
+            val target = resolveTypstExportTarget(project, file)
+            log.debug { "[preview] exporting $target via tinymist (focused ${file.path})" } // Through the project export service, not TinymistCommands directly: with a pinned
+            // main every open previewer resolves to the same target, and 20 tabs exporting it at
+            // once collide on the single output PDF.
+            val result = project.service<TypstExportService>().exportPdf(target)
+            log.debug { "[preview] export result for $target: $result" }
 
             when (result) {
                 is ExportPdfResult.Exported -> {
+                    showingError = false
                     outputPdf =
                         result.pdf.toFile() // tinymist writes the PDF outside the IDE's VFS; refresh so the VFS listener
                     // and any open editors observe the new bytes, then reload the panel.
@@ -488,7 +508,9 @@ class TypstFilePreviewer(
      */
     private fun handleUnavailable(attempt: Int) {
         when (val decision = decideUnavailableAction(
-            TinymistCommands.isServerReady(project, Path.of(file.path)), attempt, MAX_EXPORT_RETRIES
+            TinymistCommands.isServerReady(project, resolveTypstExportTarget(project, file)),
+            attempt,
+            MAX_EXPORT_RETRIES
         )) {
             UnavailableAction.PollForServer -> scheduleExportWhenReady()
 
@@ -519,7 +541,11 @@ class TypstFilePreviewer(
      * bridge, stranding the next hot-swap.
      */
     private fun showWaitingPageIfNoRender() {
-        if (outputPdf != null) return
+        if (outputPdf != null) return // Never paint "Compiling…" over an error that is already on screen. A failed compile
+        // is a terminal state until the next export attempt actually starts; a later readiness
+        // poll or transient retry replacing it with the waiting splash strands the user on
+        // "Compiling…" forever, hiding the diagnostic they need to act on.
+        if (showingError) return
         ApplicationManager.getApplication().invokeLater {
             if (!project.isDisposed) browser?.loadHTML(waitingHtml())
         }
@@ -531,6 +557,7 @@ class TypstFilePreviewer(
      * detail goes only to the console, so no HTML escaping is needed here.
      */
     private fun showPreviewError(consoleMessage: String) {
+        showingError = true
         printToConsole(project, log, consoleMessage, ConsoleViewContentType.ERROR_OUTPUT)
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
@@ -576,6 +603,26 @@ class TypstFilePreviewer(
                 }
             }
         })
+    }
+
+    /**
+     * Re-exports when the project's pinned main entry changes.
+     *
+     * Without this the pane is stranded on a stale render: [listenForFileChanges] only reacts
+     * to a save of *this* file or a rewrite of *our* output PDF, and a pin change is neither.
+     * A chapter that compiles standalone therefore keeps showing its own short PDF forever
+     * after a main is pinned — and, symmetrically, keeps showing the full document after an
+     * unpin. The export target is re-resolved inside [runExport], so simply scheduling one is
+     * enough; the debounce coalesces the burst when several panes are open.
+     */
+    private fun listenForPinChanges() {
+        project.messageBus.connect(this).subscribe(
+            TypstMainFilePinChangeListener.TOPIC,
+            TypstMainFilePinChangeListener {
+                log.debug { "[preview] main-file pin changed; re-exporting ${file.path}" }
+                scheduleExport()
+            },
+        )
     }
 
     // ---- Reload the PDF in the JCEF browser ----

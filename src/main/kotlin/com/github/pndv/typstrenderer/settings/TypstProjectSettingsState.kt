@@ -28,6 +28,12 @@ class TypstProjectSettingsState : PersistentStateComponent<TypstProjectSettingsS
         // PDFs; the source folder structure is mirrored beneath it. Feeds the
         // `outputPath` template sent to tinymist (see TinymistLspServerDescriptor).
         var typstExportPath: String = DEFAULT_EXPORT_PATH,
+
+        // Absolute path of the file pinned as the compilation entry (main.typ) for a
+        // multi-file project. Re-sent to tinymist via `tinymist.pinMain` on every
+        // LSP attach so cross-file references resolve when a chapter file is opened
+        // in isolation. Blank means no pin — tinymist compiles the focused file.
+        var typstMainFile: String = "",
     )
 
     private var state = State()
@@ -44,6 +50,12 @@ class TypstProjectSettingsState : PersistentStateComponent<TypstProjectSettingsS
         get() = state.typstExportPath
         set(value) {
             state.typstExportPath = value
+        }
+
+    var typstMainFile: String
+        get() = state.typstMainFile
+        set(value) {
+            state.typstMainFile = value
         }
 
     override fun getState(): State = state

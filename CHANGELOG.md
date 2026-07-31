@@ -4,6 +4,41 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Pin a main entry file for multi-file projects.** In a project where `main.typ` `#include`s a tree of chapter files,
+  opening a chapter on its own used to compile it in isolation, so every cross-file reference (`@ch:cases` pointing at a
+  label declared elsewhere) reported "label does not exist" — errors that vanished only when `main.typ` was reopened.
+  Right-click a `.typ` file and choose **Pin as Typst Main File** (or set it in Settings > Tools > Typst > Project
+  Overrides) and the whole project is compiled through that entry instead: cross-references resolve, the editor stops
+  reporting phantom errors, and the preview shows the complete document while you edit any chapter. **Unpin Typst Main
+  File** reverts to compiling whichever file is focused. The pin is re-applied automatically whenever the language
+  server restarts (issue #97).
+
+### Fixed
+
+- The preview no longer gets stuck on "Compiling…" after a compile fails. A failed compile now keeps its error pane on
+  screen until the next successful compile, instead of being painted over by the waiting splash and hiding the
+  diagnostic (issue #98).
+- `.typ` files outside the project are compiled as themselves even when a main entry is pinned, rather than being
+  redirected to the project's document (issue #99).
+- Several reliability problems on the compile path (issue #101):
+  - Compiling no longer fails with "failed to persist temporary file: Access is denied" when several editor tabs refresh
+    at once; simultaneous compiles of the same document are now merged into one.
+  - Compile requests are no longer sent to the wrong language server, which reported "file not found" for files that
+    exist — most visibly after a file was created or replaced outside the IDE.
+  - Applying a project setting no longer leaves out-of-project `.typ` files without a language server until their editor
+    is closed and reopened.
+  - **Compile** now saves modified files first, so it no longer produces a PDF of the previously saved text while
+    reporting success.
+  - A language server that stops unexpectedly is restarted automatically, instead of leaving the preview waiting
+    indefinitely.
+
+### Changed
+
+- The bundled tinymist language server is now pinned to **v0.15.2** (from v0.14.18). Users who already have an
+  auto-downloaded tinymist keep their existing binary — the new pin applies to fresh downloads.
+
 ## [0.4.3] - 2026-07-21
 
 ### Fixed

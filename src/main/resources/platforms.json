@@ -1,6 +1,6 @@
 {
   "tinymist": {
-    "baseUrl": "https://github.com/Myriad-Dreamin/tinymist/releases/download/v0.14.18",
+    "baseUrl": "https://github.com/Myriad-Dreamin/tinymist/releases/download/v0.15.2",
     "platforms": [
       {
         "os": "darwin",

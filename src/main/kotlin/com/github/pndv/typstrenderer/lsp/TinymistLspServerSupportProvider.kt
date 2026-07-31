@@ -1,10 +1,6 @@
 package com.github.pndv.typstrenderer.lsp
 
-import com.github.pndv.typstrenderer.TYPST_NOTIFICATION_GROUP_ID
-import com.github.pndv.typstrenderer.TypstBundle
 import com.github.pndv.typstrenderer.language.TypstFileType
-import com.intellij.notification.NotificationGroupManager
-import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
@@ -78,15 +74,13 @@ class TinymistLspServerSupportProvider : LspIntegrationProvider {
                     if (success) {
                         log.info("Tinymist downloaded successfully; requesting LSP (re)start")
                         LspClientManager.getInstance(project).startClientsIfNeeded<TinymistLspServerSupportProvider>()
-                    } else {
-                        log.warn("Tinymist download failed; LSP server will not be started")
-                        NotificationGroupManager.getInstance()
-                            .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
-                            .createNotification(
-                                TypstBundle.message("notification.tinymist.notFound.title"),
-                                TypstBundle.message("notification.tinymist.notFound.body"),
-                                NotificationType.WARNING
-                            ).notify(project)
+                    } else { // Log only — TinymistDownloadService owns the user-facing failure
+                        // notification and deduplicates it across a failure streak. Notifying
+                        // here as well double-reported every failure, and worse: `onComplete(false)`
+                        // also fires for requests the service *declined* to run (back-off, or a
+                        // download already in flight), so throttled no-ops each raised a balloon.
+                        // That is what kept the count high after the deduplication went in (#105).
+                        log.warn("Tinymist download failed or was skipped; LSP server will not be started")
                     }
                 }
             }
