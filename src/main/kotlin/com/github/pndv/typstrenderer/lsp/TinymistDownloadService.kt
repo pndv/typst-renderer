@@ -18,8 +18,63 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 private val LOG = logger<TinymistDownloadService>()
+
+/**
+ * What [TinymistDownloadService.downloadInBackground] should do with an incoming request, given
+ * how the previous attempts went. Pure so the throttling — the part that misbehaves invisibly —
+ * can be unit-tested without a network, a project, or the notification subsystem.
+ */
+internal sealed interface DownloadAttempt {
+    /** No attempt is in flight and no back-off applies — run the download. */
+    data object Proceed : DownloadAttempt
+
+    /** Another download is already running; this request is redundant. */
+    data object AlreadyRunning : DownloadAttempt
+
+    /** The last attempts failed and the back-off window has not elapsed. */
+    data class BackOff(val remainingMs: Long) : DownloadAttempt
+}
+
+/**
+ * Decides whether to attempt a download.
+ *
+ * Downloads fail for reasons that are almost always *persistent* — offline, an unsupported
+ * platform, a 404 on the pinned asset — so retrying immediately cannot succeed and only produces
+ * another balloon. Each consecutive failure therefore doubles the wait, from [baseBackoffMs] up to
+ * [maxBackoffMs]. A success resets the streak, so a genuinely transient failure recovers promptly.
+ *
+ * [consecutiveFailures] of 0 always proceeds: the first attempt, and the first after any success.
+ */
+internal fun decideDownloadAttempt(
+    isDownloading: Boolean,
+    consecutiveFailures: Int,
+    lastFailureAtMs: Long,
+    nowMs: Long,
+    baseBackoffMs: Long,
+    maxBackoffMs: Long,
+): DownloadAttempt {
+    if (isDownloading) return DownloadAttempt.AlreadyRunning
+    if (consecutiveFailures <= 0) return DownloadAttempt.Proceed
+
+    val shift = (consecutiveFailures - 1).coerceIn(0, 20)
+    val window = (baseBackoffMs shl shift).coerceAtMost(maxBackoffMs)
+    val elapsed = nowMs - lastFailureAtMs
+    return if (elapsed >= window) DownloadAttempt.Proceed else DownloadAttempt.BackOff(window - elapsed)
+}
+
+/**
+ * Whether a failure should raise a user-visible notification.
+ *
+ * Only the **first** failure of a streak does. A repeat tells the user nothing new, and the
+ * balloons stack: with the binary missing and several `.typ` files open, every attempt raised its
+ * own, producing hundreds of identical notifications (issue #105). [consecutiveFailures] is the
+ * count *including* the failure being reported, so 1 is the first.
+ */
+internal fun shouldNotifyDownloadFailure(consecutiveFailures: Int): Boolean = consecutiveFailures <= 1
 
 /**
  * Downloads the tinymist language server binary from GitHub releases.
@@ -29,11 +84,31 @@ class TinymistDownloadService {
 
     val isDownloading: AtomicBoolean = AtomicBoolean(false)
 
+    /** Consecutive failed attempts; reset to 0 by a success. Drives back-off and notification. */
+    private val consecutiveFailures = AtomicInteger(0)
+    private val lastFailureAt = AtomicLong(0)
+
     /**
      * Downloads tinymist in a background task with a progress indicator.
      * Calls [onComplete] on the EDT when done (true = success, false = failure).
+     *
+     * Repeated failures back off and stop notifying — see [decideDownloadAttempt] and
+     * [shouldNotifyDownloadFailure].
      */
     fun downloadInBackground(project: Project?, onComplete: ((Boolean) -> Unit)? = null) {
+        val decision = decideDownloadAttempt(
+            isDownloading = isDownloading.get(),
+            consecutiveFailures = consecutiveFailures.get(),
+            lastFailureAtMs = lastFailureAt.get(),
+            nowMs = System.currentTimeMillis(),
+            baseBackoffMs = BASE_BACKOFF_MS,
+            maxBackoffMs = MAX_BACKOFF_MS,
+        )
+        if (decision is DownloadAttempt.BackOff) {
+            LOG.debug("Skipping tinymist download: ${consecutiveFailures.get()} consecutive failures, retrying in ${decision.remainingMs}ms")
+            onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
+            return
+        }
         if (!isDownloading.compareAndSet(false, true)) {
             onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
             return
@@ -54,7 +129,7 @@ class TinymistDownloadService {
 
                     val assetName = TinymistManager.getPlatformAssetName()
                     if (assetName == null) {
-                        notifyError(project, unsupportedPlatformMessage())
+                        recordFailureAndNotify(project, unsupportedPlatformMessage())
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
@@ -65,7 +140,7 @@ class TinymistDownloadService {
                     // when one has been set — keeps tests offline and hermetic.
                     val downloadUrl = resolveLatestDownloadUrl(PlatformConfig.tinymistBaseUrl, assetName)
                     if (downloadUrl == null) {
-                        notifyError(project, TypstBundle.message("download.tinymist.notFound", assetName))
+                        recordFailureAndNotify(project, TypstBundle.message("download.tinymist.notFound", assetName))
                         onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                         return
                     }
@@ -87,6 +162,9 @@ class TinymistDownloadService {
                     indicator.fraction = 1.0
                     indicator.text = TypstBundle.message("download.tinymist.success")
 
+                    // Success clears the streak, so a later transient failure notifies
+                    // and retries promptly instead of inheriting an old back-off.
+                    consecutiveFailures.set(0)
                     LOG.info("Tinymist downloaded to: ${targetFile.absolutePath}")
 
                     NotificationGroupManager.getInstance()
@@ -104,7 +182,10 @@ class TinymistDownloadService {
                         LOG.info("Tinymist download cancelled by user")
                     } else {
                         LOG.warn("Failed to download tinymist", e)
-                        notifyError(project, TypstBundle.message("download.tinymist.failed", e.message ?: ""))
+                        recordFailureAndNotify(
+                            project,
+                            TypstBundle.message("download.tinymist.failed", e.message ?: "")
+                        )
                     }
                     onComplete?.let { ApplicationManager.getApplication().invokeLater { it(false) } }
                 } finally {
@@ -167,7 +248,28 @@ class TinymistDownloadService {
             ).notify(project)
     }
 
+    /**
+     * Records a failed attempt and raises a notification only for the first failure of a streak.
+     * Suppressed repeats are still logged, so the log keeps the full picture while the user sees
+     * one actionable balloon.
+     */
+    private fun recordFailureAndNotify(project: Project?, message: String) {
+        val failures = consecutiveFailures.incrementAndGet()
+        lastFailureAt.set(System.currentTimeMillis())
+        if (shouldNotifyDownloadFailure(failures)) {
+            notifyError(project, message)
+        } else {
+            LOG.info("Tinymist download failed again (attempt $failures), notification suppressed: $message")
+        }
+    }
+
     companion object {
+        /** First retry window after a failure; doubles per consecutive failure. */
+        internal const val BASE_BACKOFF_MS = 30_000L
+
+        /** Ceiling for the retry window. */
+        internal const val MAX_BACKOFF_MS = 600_000L
+
         fun getInstance(): TinymistDownloadService =
             ApplicationManager.getApplication().getService(TinymistDownloadService::class.java)
 

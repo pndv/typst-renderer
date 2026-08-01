@@ -242,18 +242,18 @@ tasks {
         group = "verification"
         description = "Fails if vendored PDF.js assets are out of sync with the `pdfjs` pin in libs.versions.toml."
         val marker = pdfjsOutDir.file(".version").asFile
-        val expected = pdfjsVersion // A verification gate should always run, never be skipped as up-to-date.
+        val expected = pdfjsVersion // A verification gate should always run, never be skipped as up to date.
         outputs.upToDateWhen { false }
         doLast {
             if (!marker.exists()) {
                 throw GradleException(
-                    "PDF.js assets are not vendored: ${marker.path} is missing. " + "Run `./gradlew downloadPdfJs` and commit src/main/resources/pdfjs.",
+                    "PDF.js assets are not vendored: ${marker.path} is missing. Run `./gradlew downloadPdfJs` and " + "commit src/main/resources/pdfjs.",
                 )
             }
             val actual = marker.readText().trim()
             if (actual != expected) {
                 throw GradleException(
-                    "Vendored PDF.js ($actual) is out of sync with the `pdfjs` pin ($expected) in " + "gradle/libs.versions.toml. Run `./gradlew downloadPdfJs` and commit " + "src/main/resources/pdfjs (mind the JCEF/Chromium ceiling noted next to the pin).",
+                    "Vendored PDF.js ($actual) is out of sync with the `pdfjs` pin ($expected) in gradle/libs.versions.toml. Run `./gradlew downloadPdfJs` and commit src/main/resources/pdfjs (mind the JCEF/Chromium ceiling noted next to the pin).",
                 )
             }
             logger.lifecycle("PDF.js vendored assets match the pin ($expected).")

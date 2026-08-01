@@ -64,6 +64,64 @@ class TypstExternalFileLspStartupActivity : ProjectActivity {
 }
 
 /**
+ * Re-establishes external-file clients for every out-of-content `.typ` file currently open.
+ *
+ * Needed because the external client's lifecycle is **ours** to own while the platform is free to
+ * stop it. `LspClientManager.stopAndRestartClientsIfNeeded` is provider-scoped, so applying a
+ * project setting stops *both* clients; the platform then restarts only what it can derive from
+ * `LspIntegrationProvider.fileOpened`, and it never calls that hook for out-of-content files
+ * (issue #92). The project-wide client therefore comes back and the external one does not,
+ * leaving every out-of-project export failing (`no tinymist client claims …`) until the user
+ * closes and reopens the file.
+ *
+ * Safe to call repeatedly: `ensureClientStarted` deduplicates on descriptor class + name + roots,
+ * and [handleOpenedFileForExternalLsp] skips in-content files and non-Typst files itself.
+ */
+internal fun ensureExternalLspForOpenFiles(project: Project) {
+    if (project.isDisposed || ApplicationManager.getApplication().isUnitTestMode) return
+    val openFiles = FileEditorManager.getInstance(project).openFiles
+    log.debug { "Re-arming external-file LSP across ${openFiles.size} open file(s)" }
+    for (file in openFiles) {
+        if (project.isDisposed) return
+        handleOpenedFileForExternalLsp(project, file)
+    }
+}
+
+/**
+ * Brings a tinymist client back for [file] after one has gone away.
+ *
+ * Called from the previewer's readiness poll, which otherwise waits forever: a client that has
+ * reached a terminal state is never restarted by anything. That is not hypothetical — the
+ * platform's own `LspDocumentSyncManager.forEachOpenedFile` iterates an unsynchronised `HashMap`
+ * while sending the initial `didOpen` burst, so restarting a client with ~20 files open can throw
+ * `ConcurrentModificationException`, log *"Failed to start LSP server"* and leave it
+ * `ShutdownUnexpectedly`. Recovering here turns that platform race into a short delay instead of
+ * a wedged preview.
+ *
+ * `startClientsIfNeeded` covers in-content files and is cheap and idempotent; out-of-content files
+ * need our own folder-rooted descriptor, because the platform will not start one for them.
+ */
+internal fun recoverTypstLspForFile(project: Project, file: VirtualFile) {
+    if (project.isDisposed || ApplicationManager.getApplication().isUnitTestMode) return
+
+    // Recovery restarts a client that went away; it must never try to *install* a missing binary.
+    // Both paths below reach TinymistDownloadService when tinymist cannot be resolved —
+    // `startClientsIfNeeded` by way of the provider's `fileOpened`, and the external handler
+    // directly — and this runs on a repeating readiness poll, once per open previewer. That turned
+    // a bounded, event-driven download trigger into 836 attempts and 830 failure balloons inside
+    // seven seconds (issue #105). Downloading stays the editor-open path's job, where it fires once
+    // per file opened.
+    if (TinymistManager.getInstance().resolveTinymistPath() == null) {
+        log.debug { "Skipping LSP recovery for ${file.path}: tinymist is not installed" }
+        return
+    }
+
+    log.debug { "Attempting tinymist LSP recovery for ${file.path}" }
+    LspClientManager.getInstance(project).startClientsIfNeeded(TinymistLspServerSupportProvider::class.java)
+    if (!isInProjectContent(project, file)) handleOpenedFileForExternalLsp(project, file)
+}
+
+/**
  * Decision table for [handleOpenedFileForExternalLsp], mirroring [decideLspAction] on the
  * provider side. Kept pure so the branching can be unit-tested without an IDE fixture.
  *

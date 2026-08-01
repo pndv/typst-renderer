@@ -100,6 +100,20 @@
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift T"/>
         </action>
 
+        <action id="Typst.PinMainFile"
+                class="com.github.pndv.typstrenderer.actions.TypstPinMainFileAction"
+                icon="AllIcons.Nodes.Favorite">
+            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="Typst.Compile"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="Typst.Compile"/>
+        </action>
+
+        <action id="Typst.UnpinMainFile"
+                class="com.github.pndv.typstrenderer.actions.TypstUnpinMainFileAction"
+                icon="AllIcons.Nodes.NotFavoriteOnHover">
+            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="Typst.PinMainFile"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="Typst.PinMainFile"/>
+        </action>
+
         <!-- Attached as a left-edge toolbar, the toolbar is then set to SimpleToolWindowPanel.
              Registered here (rather than created inline in the factory) so they're discoverable from the action search
              palette and can be assigned keyboard shortcuts by the user. -->
