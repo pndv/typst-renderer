@@ -2,7 +2,7 @@
 # - Validate Gradle Wrapper.
 # - Run 'test' and 'verifyPlugin' tasks.
 # - Run Qodana inspections.
-# - Run the 'buildPlugin' task and prepare the artifact for further tests.
+# - Run the 'buildPlugin' task and prepare the artefact for further tests.
 # - Run the 'runPluginVerifier' task.
 # - Create a draft release.
 #
@@ -56,7 +56,7 @@ jobs:
       # Defensive sanity-check: the PDF.js viewer assets are vendored into
       # src/main/resources/pdfjs and committed to git. If someone accidentally
       # edits .gitignore or removes the un-ignore lines, local builds may
-      # still succeed from cache but a clean CI checkout will produce a
+      # still succeed from cache, but a clean CI checkout will produce a
       # broken plugin. Fail fast here instead.
       - name: Verify PDF.js is pre-vendored
         run: test -f src/main/resources/pdfjs/.version && test -f src/main/resources/pdfjs/web/viewer.html
@@ -65,9 +65,9 @@ jobs:
       - name: Build plugin
         run: ./gradlew buildPlugin
 
-      # Prepare plugin archive content for creating artifact
-      - name: Prepare Plugin Artifact
-        id: artifact
+      # Prepare plugin archive content for creating artefact
+      - name: Prepare Plugin Artefact
+        id: artefact
         shell: bash
         run: |
           cd ${{ github.workspace }}/build/distributions
@@ -76,11 +76,11 @@ jobs:
 
           echo "filename=${FILENAME:0:-4}" >> $GITHUB_OUTPUT
 
-      # Store an already-built plugin as an artifact for downloading
-      - name: Upload artifact
+      # Store an already-built plugin as an artefact for downloading
+      - name: Upload artefact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.artifact.outputs.filename }}
+          name: ${{ steps.artefact.outputs.filename }}
           path: ./build/distributions/content/*/*
 
   # Run CodeQL analysis

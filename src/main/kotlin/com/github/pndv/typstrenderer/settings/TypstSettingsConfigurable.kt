@@ -1,15 +1,15 @@
 package com.github.pndv.typstrenderer.settings
 
 import com.github.pndv.typstrenderer.TypstBundle.message
+import com.github.pndv.typstrenderer.editor.TypstPreviewMode
 import com.github.pndv.typstrenderer.lsp.TinymistDownloadService
 import com.github.pndv.typstrenderer.lsp.TinymistManager
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.dsl.builder.bindSelected
-import com.intellij.ui.dsl.builder.bindText
-import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.*
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import javax.swing.JComponent
 
 class TypstSettingsConfigurable : Configurable {
@@ -43,12 +43,40 @@ class TypstSettingsConfigurable : Configurable {
         }
 
         group(message("settings.preview.group.label")) {
+            row(message("settings.preview.mode.label")) {
+                comboBox(
+                    TypstPreviewMode.entries,
+                    previewModeRenderer()
+                ).comment(message("settings.preview.mode.comment"))
+                    .bindItem(settings::defaultPreviewMode.toNullableProperty(TypstPreviewMode.LIVE))
+            }
+            row {
+                checkBox(message("settings.preview.onType.label")).comment(message("settings.preview.onType.comment"))
+                    .bindSelected(settings::livePreviewOnType)
+            }
+            row {
+                checkBox(message("settings.preview.followCursor.label")).comment(message("settings.preview.followCursor.comment"))
+                    .bindSelected(settings::livePreviewFollowCursor)
+            }
             row {
                 checkBox(message("settings.preview.checkbox.label")).comment(message("settings.preview.checkbox.comment"))
                     .bindSelected(settings::rememberPreviewScrollAcrossRestart)
             }
         }
     }.also { settingsPanel = it }
+
+    /**
+     * Renders the mode constants with their user-facing names. Without a renderer the combo
+     * would show `LIVE` / `PDF` — the Kotlin constant names rather than translatable labels.
+     */
+    private fun previewModeRenderer() = textListCellRenderer("") { mode: TypstPreviewMode ->
+        message(
+            when (mode) {
+                TypstPreviewMode.LIVE -> "settings.preview.mode.live"
+                TypstPreviewMode.PDF -> "settings.preview.mode.pdf"
+            }
+        )
+    }
 
     override fun isModified(): Boolean = settingsPanel?.isModified() == true
 

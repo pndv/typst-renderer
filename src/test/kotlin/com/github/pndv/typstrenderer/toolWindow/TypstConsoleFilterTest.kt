@@ -229,9 +229,9 @@ class TypstConsoleFilterTest {
         // segments (literal backslashes) and wrapped in real quotes so the formatter's
         // quote-extraction has a pair to find.
         val debugPayload =
-            """error: label `<ch:cases>` occurs multiple times in the document\n""" + """  ┌─ d:\\Projects\\ru-hi\\chapters\\intro\\spelling-rules.typ:6:59\n""" + """  │\n6 │ स\u{94d}मरित\n  │     ^^^^^^^^^\n\n"""
+            """error: label `<ch:cases>` occurs multiple times in the document\n""" + """  ┌─ d:\\Projects\\sample-doc\\chapters\\intro\\spelling-rules.typ:6:59\n""" + """  │\n6 │ स\u{94d}मरित\n  │     ^^^^^^^^^\n\n"""
         val rawExportError =
-            """crates\tinymist\src\task\export.rs:579:17: ExportTask(0): document is not available for export: """ + "\"" + debugPayload + "\""
+            "crates\\tinymist\\src\\task\\export.rs:579:17: ExportTask(0): document is not available for export: \"$debugPayload\""
 
         val formatted = TinymistCommands.formatExportError(rawExportError)
         val lines = formatted.lines()
@@ -242,7 +242,7 @@ class TypstConsoleFilterTest {
         assertEquals("Only the ┌─ anchor line should hyperlink", 1, matches.size)
 
         val match = matches.single()
-        assertEquals("""d:\Projects\ru-hi\chapters\intro\spelling-rules.typ""", match.path)
+        assertEquals("""d:\Projects\sample-doc\chapters\intro\spelling-rules.typ""", match.path)
         assertEquals(6, match.lineNumber)
         assertEquals(59, match.column)
     }

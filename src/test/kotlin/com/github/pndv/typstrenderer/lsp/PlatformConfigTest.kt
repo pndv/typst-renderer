@@ -107,8 +107,8 @@ class PlatformConfigTest {
 
     @Test
     fun platformsJsonSchema_allAssetsNonEmpty() {
-        for (tool in listOf(PlatformConfig.tinymist)) {
-            for ((key, entry) in tool.platforms) {
+        for ((_, platforms) in listOf(PlatformConfig.tinymist)) {
+            for ((key, entry) in platforms) {
                 assertTrue("asset empty for $key", entry.asset.isNotBlank())
             }
         }
@@ -117,8 +117,8 @@ class PlatformConfigTest {
     @Test
     fun platformsJsonSchema_archiveIsNullOrRecognized() {
         val allowed = setOf(null, "tarxz", "zip")
-        for (tool in listOf(PlatformConfig.tinymist)) {
-            for ((key, entry) in tool.platforms) {
+        for ((_, platforms) in listOf(PlatformConfig.tinymist)) {
+            for ((key, entry) in platforms) {
                 assertTrue(
                     "archive for $key is not one of $allowed: ${entry.archive}",
                     entry.archive in allowed,
@@ -129,8 +129,8 @@ class PlatformConfigTest {
 
     @Test
     fun platformsJsonSchema_baseUrlsAreValid() {
-        for (tool in listOf(PlatformConfig.tinymist)) {
-            val uri = URI(tool.baseUrl)
+        for ((baseUrl) in listOf(PlatformConfig.tinymist)) {
+            val uri = URI(baseUrl)
             assertEquals("https", uri.scheme)
             assertNotNull(uri.host)
         }
@@ -138,8 +138,8 @@ class PlatformConfigTest {
 
     @Test
     fun platformsJsonSchema_noDuplicatePlatformKeys() {
-        for (tool in listOf(PlatformConfig.tinymist)) {
-            val keys = tool.platforms.keys
+        for ((_, platforms) in listOf(PlatformConfig.tinymist)) {
+            val keys = platforms.keys
             assertEquals(keys.size, keys.toSet().size)
         }
     }

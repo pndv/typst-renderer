@@ -13,9 +13,10 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.diagnostic.trace
-import com.intellij.openapi.fileEditor.FileEditor
-import com.intellij.openapi.fileEditor.FileEditorState
-import com.intellij.openapi.fileEditor.FileEditorStateLevel
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.event.CaretEvent
+import com.intellij.openapi.editor.event.CaretListener
+import com.intellij.openapi.fileEditor.*
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -118,12 +119,49 @@ internal fun isViewerPage(currentUrl: String?, viewerUrl: String): Boolean =
     currentUrl != null && currentUrl.startsWith(viewerUrl)
 
 /**
- * A file editor that shows a live PDF preview of a Typst file.
+ * Whether a page that just committed means the live-preview navigation was superseded and has to
+ * be re-issued (see [TypstFilePreviewer.reassertLiveFrontend]).
  *
- * Renders the compiled PDF in a JCEF (embedded Chromium) browser panel. The PDF is produced
- * by tinymist via the LSP `tinymist.exportPdf` command (see [TinymistCommands]) — there is no
- * `typst watch` subprocess. The preview re-exports (debounced) whenever the previewed file
- * itself is saved, and reloads the panel from the path tinymist reports back.
+ * Extracted as a pure decision because the failure it guards against is invisible: the pane simply
+ * sits on the "Compiling…" splash forever, with no error anywhere except a single `ERR_ABORTED`
+ * line. [desiredUrl] is `null` whenever the pane is not in live mode, which must never re-assert.
+ * A prefix match rather than equality — the browser reports the committed URL with a trailing
+ * slash that the URL we asked for does not carry.
+ */
+internal fun shouldReassertLiveUrl(committedUrl: String?, desiredUrl: String?): Boolean =
+    desiredUrl != null && !committedUrl.orEmpty().startsWith(desiredUrl)
+
+/**
+ * Whether a caret position should be pushed to the live preview (see
+ * [TypstFilePreviewer.requestCaretSync]).
+ *
+ * [editorIsSelected] is the load-bearing condition. `tinymist.scrollPreview` addresses a *task*,
+ * so the scroll reaches every pane sharing it; letting a background tab send would drag the pane
+ * the user is reading to a position from a file they are not even looking at.
+ */
+internal fun shouldSyncPreviewToCaret(
+    mode: TypstPreviewMode,
+    followCursor: Boolean,
+    editorIsSelected: Boolean,
+    hasLiveTask: Boolean,
+): Boolean = mode == TypstPreviewMode.LIVE && followCursor && editorIsSelected && hasLiveTask
+
+/**
+ * A file editor that shows a preview of a Typst file in a JCEF (embedded Chromium) panel.
+ *
+ * The panel renders in one of two modes (see [TypstPreviewMode]), chosen by the user and never
+ * switched automatically:
+ *
+ *  - [TypstPreviewMode.LIVE] — tinymist runs its own preview server (`tinymist.doStartPreview`)
+ *    and the panel loads its frontend directly. tinymist re-renders from the in-memory document
+ *    as `textDocument/didChange` arrives, so the preview follows the caret with no save and no
+ *    PDF written to disk. Owned by [TypstLivePreviewSession].
+ *  - [TypstPreviewMode.PDF] — the PDF is produced by `tinymist.exportPdf` (see [TinymistCommands])
+ *    and rendered by the vendored PDF.js viewer. The export is debounced off saves of the
+ *    previewed file, and the panel reloads from the path tinymist reports back.
+ *
+ * Compile and Export write a PDF and report to the console in both modes; only a panel already
+ * in [TypstPreviewMode.PDF] reloads in response.
  */
 class TypstFilePreviewer(
     private val project: Project, private val file: VirtualFile
@@ -189,6 +227,33 @@ class TypstFilePreviewer(
     /** Stable per-previewer ID used in HTTP URLs to route /pdf/<id> and /bridge/<id> requests. */
     private val previewerId: String = java.util.UUID.randomUUID().toString()
 
+    /**
+     * Which renderer this pane is showing. Seeded from the application default and changed
+     * only by the user, via [setPreviewMode] — a compile or export never moves it. Read from
+     * the export thread and the EDT, hence @Volatile.
+     */
+    @Volatile
+    private var mode: TypstPreviewMode = TypstSettingsState.getInstance().defaultPreviewMode
+
+    /** Owns the tinymist preview task backing [TypstPreviewMode.LIVE]. */
+    private val liveSession = TypstLivePreviewSession(project, previewerId)
+
+    /**
+     * The live page this pane intends to be on, or `null` when it is not in live mode. Any other
+     * page committing while this is set means the navigation was superseded — see
+     * [reassertLiveFrontend].
+     */
+    @Volatile
+    private var desiredLiveUrl: String? = null
+
+    /** Re-assert attempts spent on [desiredLiveUrl]; reset each time a new task is loaded. */
+    @Volatile
+    private var liveLoadAttempts: Int = 0
+
+    /** Pending debounced push of the caret position to the live preview. */
+    @Volatile
+    private var scrollJob: ScheduledFuture<*>? = null
+
     init {
         if (jcefSupported) {
             browser?.let { Disposer.register(this, it) }
@@ -199,12 +264,56 @@ class TypstFilePreviewer(
             listenForThemeChanges()
             listenForFileChanges()
             listenForPinChanges()
+            listenForCaretMoves()
+            listenForTabSelection()
 
-            // Show a placeholder, then kick off the first export so the panel
-            // populates without waiting for the user to save.
+            // Show a placeholder, then bring up whichever renderer the mode calls for so the
+            // panel populates without waiting for the user to save.
             browser?.loadHTML(waitingHtml())
-            scheduleExportWhenReady()
+            startCurrentMode()
         }
+    }
+
+    // ---- Mode selection ----
+
+    /** Brings up the renderer for the current [mode]. */
+    private fun startCurrentMode() = when (mode) {
+        TypstPreviewMode.LIVE -> scheduleLiveWhenReady()
+        TypstPreviewMode.PDF -> scheduleExportWhenReady()
+    }
+
+    /** The mode this pane is currently showing — read by the toolbar toggle. */
+    internal fun currentPreviewMode(): TypstPreviewMode = mode
+
+    /**
+     * Switches the pane between the live and PDF renderers.
+     *
+     * Tears the outgoing renderer down before starting the incoming one: a live task left
+     * running would keep recompiling for a pane nobody is looking at, and the splash makes the
+     * changeover explicit rather than leaving the previous renderer's last frame on screen
+     * while the new one warms up.
+     */
+    internal fun setPreviewMode(newMode: TypstPreviewMode) {
+        if (newMode == mode || !jcefSupported) return
+        log.info("[preview] mode ${mode.id} -> ${newMode.id} for ${file.path}")
+        mode = newMode
+        exportJob?.cancel(false)
+        reloadJob?.cancel(false)
+        showingError = false
+
+        if (newMode == TypstPreviewMode.PDF) {
+            desiredLiveUrl = null // stop re-asserting a page this pane no longer wants
+            stopLiveSession()
+        }
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) browser?.loadHTML(waitingHtml())
+        }
+        startCurrentMode()
+    }
+
+    /** Kills the live task off the EDT. Harmless when no task is running. */
+    private fun stopLiveSession() {
+        ApplicationManager.getApplication().executeOnPooledThread { liveSession.stop() }
     }
 
     /** Wires the JS-side viewport reports into [lastViewport]. */
@@ -260,6 +369,22 @@ class TypstFilePreviewer(
             ) {
                 val url = frame.url.orEmpty()
                 log.info("[pdfjs] onLoadEnd status=$httpStatusCode url=$url isMain=${frame.isMain}")
+
+                // A page other than the live frontend committing in the main frame while live
+                // mode wants that frontend means our navigation lost — put it back.
+                if (frame.isMain && shouldReassertLiveUrl(url, desiredLiveUrl)) {
+                    reassertLiveFrontend("pane settled on $url instead of the live preview")
+                    return
+                }
+
+                // The live frontend committed. A freshly loaded page always starts at the top of
+                // the document — which is what a jump from the preview into a not-yet-open file
+                // lands the reader on — so put it back where the caret is.
+                val wantedLive = desiredLiveUrl
+                if (frame.isMain && wantedLive != null && url.startsWith(wantedLive)) {
+                    requestCaretSync(LIVE_SCROLL_AFTER_LOAD_MS)
+                }
+
                 b.executeJavaScript(
                     "document.documentElement.style.colorScheme='$colourScheme';", url, 0
                 )
@@ -287,6 +412,13 @@ class TypstFilePreviewer(
                 failedUrl: String?
             ) {
                 log.warn("[pdfjs] onLoadError code=$errorCode text=$errorText url=$failedUrl isMain=${frame?.isMain}")
+
+                // ERR_ABORTED on the live URL is the superseded-navigation case: the browser's
+                // own deferred first load committed over the top of ours.
+                val wantedLive = desiredLiveUrl ?: return
+                if (failedUrl.orEmpty().startsWith(wantedLive)) {
+                    reassertLiveFrontend("live preview navigation failed with $errorCode")
+                }
             }
         }, cefBrowser)
 
@@ -331,7 +463,14 @@ class TypstFilePreviewer(
     private fun listenForThemeChanges() { // Instantiate the app service so its init subscribes to LaF/editor events and republishes them on TOPIC.
         TypstThemeService.getInstance()
         ApplicationManager.getApplication().messageBus.connect(this)
-            .subscribe(TypstThemeService.TOPIC, TypstThemeListener { _ ->
+            .subscribe(TypstThemeService.TOPIC, TypstThemeListener { _ -> // The live renderer takes its colour-inversion strategy as a start-up argument,
+                // so it cannot be recoloured in place the way the PDF.js pane can — restart the
+                // task instead. Theme switches are rare enough for that to be the cheap option.
+                if (mode == TypstPreviewMode.LIVE) {
+                    log.debug { "[theme] restarting live preview to pick up the new scheme ($colourScheme)" }
+                    scheduleLiveWhenReady()
+                    return@TypstThemeListener
+                }
                 ApplicationManager.getApplication().invokeLater {
                     val cef = browser?.cefBrowser ?: return@invokeLater
                     log.debug("[theme] re-applying preview colours (scheme=$colourScheme)")
@@ -386,8 +525,254 @@ class TypstFilePreviewer(
         PdfjsPreviewerRegistry.unregister(previewerId)
         exportJob?.cancel(false)
         reloadJob?.cancel(false)
+        scrollJob?.cancel(false) // Off the EDT and off reloadExecutor (shut down below): killing the task is a blocking
+        // LSP round-trip. Without it a closed tab leaves tinymist recompiling into a preview
+        // server nobody is connected to, holding its port for the rest of the session.
+        stopLiveSession()
         reloadExecutor.shutdownNow() // The exported PDF is a real project artefact (it lives in the configured export
         // directory, same as a manual Compile) — leave it on disk.
+    }
+
+    // ---- Live preview via tinymist's own preview server ----
+
+    /** Polls for the tinymist LSP, then starts a preview task and loads its frontend. */
+    private fun scheduleLiveWhenReady() {
+        exportJob?.cancel(false)
+        exportJob = reloadExecutor.schedule({ startLiveWhenReady(pollCount = 0) }, 0, TimeUnit.MILLISECONDS)
+    }
+
+    /**
+     * Cold-start loop for the live renderer, sharing [decideExportReadiness] and the backoff
+     * schedule with the export path — the thing being waited for is the same tinymist client.
+     *
+     * A start that comes back [PreviewStartResult.Unavailable] re-enters this loop (the server
+     * went away mid-request), while a [PreviewStartResult.Failed] falls straight back to the PDF
+     * pane: tinymist answered and refused, so waiting longer changes nothing.
+     */
+    private fun startLiveWhenReady(pollCount: Int) {
+        if (project.isDisposed || !file.isValid) return
+        if (mode != TypstPreviewMode.LIVE) return // switched away while this was queued
+
+        val target = resolveTypstExportTarget(project, file)
+        val dark = isDarkTheme()
+        when (val readiness =
+            decideExportReadiness(
+                TinymistCommands.isServerReady(project, target),
+                pollCount,
+                MAX_SERVER_POLLS
+            )) { // Already serving this exact target under this theme: keep the task and the scroll
+            // position the reader is at, and only make sure the pane is actually showing it.
+            // The pin-change and theme broadcasts reach every open previewer, so restarting
+            // unconditionally here scrolled every preview in the project back to the top.
+            ExportReadiness.Export if liveSession.isLiveFor(target, dark) -> {
+                log.debug { "[live] task already serving $target; not restarting" }
+                liveSession.url?.let { loadLiveFrontend(it, force = false) }
+            }
+
+            ExportReadiness.Export -> when (val result = liveSession.start(target, dark)) {
+                is PreviewStartResult.Started -> {
+                    showingError = false
+                    loadLiveFrontend(result.session.url, force = true)
+                }
+
+                is PreviewStartResult.Failed -> fallBackToPdfPane(result.detail)
+
+                // The round-trip never reached the server — treat it as one more readiness
+                // poll rather than a refusal, so a restart mid-start self-heals.
+                PreviewStartResult.Unavailable -> scheduleLiveRetry(pollCount + 1)
+            }
+
+            is ExportReadiness.Poll -> { // Same rationale as the export path: polling alone never revives a client that
+                // died, so ask for a restart on each poll while the backoff keeps it cheap.
+                recoverTypstLspForFile(project, file)
+                showWaitingPageIfNoRender()
+                scheduleLiveRetry(readiness.nextPollCount)
+            }
+
+            ExportReadiness.GiveUp -> showPreviewError(
+                TypstBundle.message(
+                    "console.compile.failed",
+                    TypstBundle.message("console.compile.failed.lspUnavailable"),
+                )
+            )
+        }
+    }
+
+    private fun scheduleLiveRetry(nextPollCount: Int) {
+        if (nextPollCount > MAX_SERVER_POLLS) {
+            fallBackToPdfPane(TypstBundle.message("console.compile.failed.lspUnavailable"))
+            return
+        }
+        val delayMs = backoffDelayMs(nextPollCount, INITIAL_SERVER_POLL_MS, MAX_SERVER_POLL_MS)
+        log.debug { "[live] tinymist not ready; poll $nextPollCount of $MAX_SERVER_POLLS in ${delayMs}ms for ${file.path}" }
+        exportJob = reloadExecutor.schedule({ startLiveWhenReady(nextPollCount) }, delayMs, TimeUnit.MILLISECONDS)
+    }
+
+    /**
+     * Points the panel at tinymist's preview frontend.
+     *
+     * Nothing else is needed: the page is self-contained and derives its update WebSocket from
+     * `window.location`, so none of the PDF.js plumbing — the `/pdf/<id>` route, the bridge JS,
+     * the viewport JSQuery — is involved in this mode.
+     *
+     * [force] distinguishes a fresh task (navigate) from a re-check of a task that is already
+     * running (navigate only if the pane drifted off the page). Re-navigating a page that is
+     * already correct would discard the reader's scroll position for nothing.
+     */
+    private fun loadLiveFrontend(url: String, force: Boolean) {
+        desiredLiveUrl = url
+        liveLoadAttempts = 0
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            val browser = browser ?: return@invokeLater
+            if (!force && browser.cefBrowser.url.orEmpty().startsWith(url)) {
+                log.debug { "[live] pane already on $url; leaving it alone" }
+                return@invokeLater
+            }
+            log.info("[live] loading tinymist preview frontend at $url")
+            browser.loadURL(url)
+        }
+    }
+
+    /**
+     * Re-issues a live-frontend navigation that did not stick.
+     *
+     * A brand-new [JBCefBrowser] defers its first page load until the native browser exists, so
+     * the constructor's "Compiling…" splash can commit *after* a `loadURL` issued moments later —
+     * aborting it and stranding the pane on the splash forever. That only bites when the whole
+     * live start beats the browser's realisation, i.e. when the LSP is already warm and the tab
+     * is newly opened; every other tab wins the race by accident and works. Re-asserting the
+     * intended page closes the gap without depending on which side wins.
+     *
+     * Bounded: after [MAX_LIVE_LOAD_ATTEMPTS] the URL is treated as unreachable (a dead preview
+     * server, not a lost race) and the pane drops to the PDF renderer rather than sitting blank.
+     */
+    private fun reassertLiveFrontend(reason: String) {
+        val url = desiredLiveUrl ?: return
+        if (mode != TypstPreviewMode.LIVE) return
+        if (liveLoadAttempts >= MAX_LIVE_LOAD_ATTEMPTS) {
+            fallBackToPdfPane(TypstBundle.message("console.preview.live.unreachable", url))
+            return
+        }
+        liveLoadAttempts++
+        log.info("[live] $reason; re-asserting $url (attempt $liveLoadAttempts of $MAX_LIVE_LOAD_ATTEMPTS)")
+        try {
+            reloadExecutor.schedule({
+                                        ApplicationManager.getApplication().invokeLater {
+                                            if (project.isDisposed || mode != TypstPreviewMode.LIVE) return@invokeLater
+                                            if (desiredLiveUrl != url) return@invokeLater // superseded by a newer task
+                                            browser?.loadURL(url)
+                                        }
+                                    }, LIVE_LOAD_REASSERT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.RejectedExecutionException) {
+            log.debug { "[live] previewer disposed before the re-assert could run: ${e.message}" }
+        }
+    }
+
+    /**
+     * Drops this pane to the PDF renderer after the live one proved unusable, telling the user
+     * why. Better than an error pane: the PDF path is a working preview, so the pane keeps
+     * doing its job and the console explains the demotion.
+     */
+    private fun fallBackToPdfPane(detail: String) {
+        if (mode != TypstPreviewMode.LIVE) return
+        desiredLiveUrl = null
+        log.warn("[live] preview unavailable for ${file.path} ($detail); falling back to the PDF renderer")
+        printToConsole(
+            project, log,
+            TypstBundle.message("console.preview.live.fallback", detail),
+            ConsoleViewContentType.SYSTEM_OUTPUT,
+        )
+        mode = TypstPreviewMode.PDF
+        scheduleExportWhenReady()
+    }
+
+    private fun isDarkTheme(): Boolean = ColorUtil.isDark(UIUtil.getPanelBackground())
+
+    // ---- Keeping the live preview on the part of the document the user is editing ----
+
+    /**
+     * Follows the caret: every move in this file's editor scrolls the live preview to match.
+     *
+     * Subscribes to the global caret multicaster and filters down to this file rather than
+     * hunting for the [com.intellij.openapi.editor.Editor] instance, which does not exist yet
+     * when this previewer is constructed and is replaced whenever the tab is reopened.
+     */
+    private fun listenForCaretMoves() {
+        EditorFactory.getInstance().eventMulticaster.addCaretListener(object : CaretListener {
+            override fun caretPositionChanged(event: CaretEvent) {
+                if (event.editor.project != project) return
+                if (FileDocumentManager.getInstance().getFile(event.editor.document) != file) return
+                requestCaretSync(CARET_SYNC_DEBOUNCE_MS)
+            }
+        }, this)
+    }
+
+    /**
+     * Scrolls the preview to this file's caret when its tab is brought to the front.
+     *
+     * Switching tabs moves no caret, so nothing else would fire — and with a main file pinned
+     * every tab shares one preview, which would otherwise go on showing the position of the
+     * chapter the user just left.
+     */
+    private fun listenForTabSelection() {
+        project.messageBus.connect(this).subscribe(
+            FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : FileEditorManagerListener {
+                override fun selectionChanged(event: FileEditorManagerEvent) {
+                    if (event.newFile != file) return
+                    log.debug { "[live] ${file.name} selected; syncing the preview to its caret" }
+                    requestCaretSync(TAB_SELECTION_SYNC_MS)
+                }
+            },
+        )
+    }
+
+    /**
+     * Pushes this file's caret position to the live preview after [delayMs].
+     *
+     * Reads the caret on the EDT and sends off it, since the send is a blocking LSP round-trip.
+     * Debounced through a single job so a burst of keystrokes costs one scroll, and so a tab
+     * switch arriving mid-burst supersedes rather than queues behind it.
+     *
+     * Safe to call from any thread.
+     */
+    private fun requestCaretSync(delayMs: Long) {
+        if (mode != TypstPreviewMode.LIVE) return // cheap pre-check; re-tested on the EDT below
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed || !file.isValid) return@invokeLater
+            val editorManager = FileEditorManager.getInstance(project)
+            val shouldSync = shouldSyncPreviewToCaret(
+                mode = mode,
+                followCursor = TypstSettingsState.getInstance().livePreviewFollowCursor,
+                editorIsSelected = editorManager.selectedEditor?.file == file,
+                hasLiveTask = liveSession.session != null,
+            )
+            if (!shouldSync) return@invokeLater
+            val position = caretPosition(editorManager) ?: return@invokeLater
+            scrollJob?.cancel(false)
+            scrollJob = try {
+                reloadExecutor.schedule({
+                                            liveSession.scrollTo(file.toNioPath(), position.first, position.second)
+                                        }, delayMs, TimeUnit.MILLISECONDS)
+            } catch (e: java.util.concurrent.RejectedExecutionException) {
+                log.debug { "[live] previewer disposed before the caret sync could run: ${e.message}" }
+                null
+            }
+        }
+    }
+
+    /**
+     * This file's caret as a zero-based (line, character) pair, or `null` when it has no open
+     * text editor. Derived from the caret offset rather than from
+     * [com.intellij.openapi.editor.LogicalPosition], whose column expands tabs — tinymist wants
+     * the LSP character index, so a tab-indented line would otherwise scroll to the wrong span.
+     */
+    private fun caretPosition(editorManager: FileEditorManager): Pair<Int, Int>? {
+        val editor = editorManager.getEditors(file).filterIsInstance<TextEditor>().firstOrNull()?.editor ?: return null
+        val offset = editor.caretModel.offset
+        val line = editor.document.getLineNumber(offset)
+        return line to (offset - editor.document.getLineStartOffset(line))
     }
 
     // ---- PDF export via tinymist LSP ----
@@ -596,8 +981,11 @@ class TypstFilePreviewer(
                         continue
                     }
 
-                    // The previewed file itself was saved → re-export.
-                    if (path == file.path) {
+                    // The previewed file itself was saved → re-export. Only in PDF mode: the
+                    // live renderer already has the edit (tinymist recompiles from the
+                    // in-memory document as didChange arrives), so exporting here would burn
+                    // a full compile per save and write a PDF the user did not ask for.
+                    if (path == file.path && mode == TypstPreviewMode.PDF) {
                         scheduleExport()
                     }
                 }
@@ -619,8 +1007,13 @@ class TypstFilePreviewer(
         project.messageBus.connect(this).subscribe(
             TypstMainFilePinChangeListener.TOPIC,
             TypstMainFilePinChangeListener {
-                log.debug { "[preview] main-file pin changed; re-exporting ${file.path}" }
-                scheduleExport()
+                log.debug { "[preview] main-file pin changed; refreshing ${file.path}" }
+                when (mode) { // A live task compiles the entry named in its own argv and ignores the
+                    // server-side pin, so a pin change means a different entry — the task has
+                    // to be restarted against it, not merely nudged.
+                    TypstPreviewMode.LIVE -> scheduleLiveWhenReady()
+                    TypstPreviewMode.PDF -> scheduleExport()
+                }
             },
         )
     }
@@ -726,6 +1119,29 @@ class TypstFilePreviewer(
     }
 
     private companion object {
+        /**
+         * How many times a live-frontend navigation is re-issued after being superseded before
+         * the URL is judged unreachable rather than merely raced.
+         */
+        const val MAX_LIVE_LOAD_ATTEMPTS = 3
+
+        /** Pause before re-issuing, so the navigation that displaced ours finishes committing. */
+        const val LIVE_LOAD_REASSERT_MS = 150L
+
+        /**
+         * Delay between the live frontend committing and the caret scroll being sent. The scroll
+         * is broadcast to the task's connected viewers with no queueing, so a page that has not
+         * yet opened its WebSocket and received the document simply misses it. Measured from the
+         * page load: socket open ~35ms, first document ~160ms — this leaves generous headroom.
+         */
+        const val LIVE_SCROLL_AFTER_LOAD_MS = 900L
+
+        /** Debounce for caret-driven scrolls, so a burst of typing costs one round-trip. */
+        const val CARET_SYNC_DEBOUNCE_MS = 250L
+
+        /** Near-immediate: a tab switch is a deliberate move, not a burst to coalesce. */
+        const val TAB_SELECTION_SYNC_MS = 120L
+
         /** Debounce window for save-triggered re-exports. */
         const val EXPORT_DEBOUNCE_MS = 300L
 
