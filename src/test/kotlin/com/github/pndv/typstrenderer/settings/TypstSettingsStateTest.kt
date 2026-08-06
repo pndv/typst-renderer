@@ -1,5 +1,6 @@
 package com.github.pndv.typstrenderer.settings
 
+import com.github.pndv.typstrenderer.editor.TypstPreviewMode
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.reflect.full.memberProperties
@@ -46,6 +47,28 @@ class TypstSettingsStateTest {
         val state = service.getState()
         assertEquals("X", state.tinymistPath)
         assertTrue(state.rememberPreviewScrollAcrossRestart)
+    }
+
+    @Test
+    fun previewModeRoundTripsAsItsPersistedId() {
+        val service = newService() // Live is the shipped default: a fresh install gets type-and-see without opting in.
+        assertEquals(TypstPreviewMode.LIVE, service.defaultPreviewMode)
+        assertTrue(service.livePreviewOnType)
+
+        service.defaultPreviewMode = TypstPreviewMode.PDF
+        service.livePreviewOnType = false
+
+        assertEquals(TypstPreviewMode.PDF, service.defaultPreviewMode)
+        assertFalse(service.livePreviewOnType) // The enum is persisted as its id, not as the enum constant.
+        assertEquals("pdf", service.getState().defaultPreviewMode)
+        assertFalse(service.getState().livePreviewOnType)
+    }
+
+    @Test
+    fun anUnreadablePersistedPreviewModeFallsBackToTheDefault() {
+        val service = newService()
+        service.loadState(TypstSettingsState.State(defaultPreviewMode = "no-such-renderer"))
+        assertEquals(TypstPreviewMode.LIVE, service.defaultPreviewMode)
     }
 
     @Test
@@ -96,11 +119,24 @@ class TypstSettingsStateTest {
                     "through TypstSettingsState.getInstance().",
                 serviceProp,
             )
+            if (name in TYPE_ADAPTING_ACCESSORS) continue
             assertEquals(
                 "TypstSettingsState.$name should have the same type as State.$name",
                 stateProp.returnType.classifier,
                 serviceProp!!.returnType.classifier,
             )
         }
+    }
+
+    private companion object {
+        /**
+         * Fields whose service accessor deliberately exposes a richer type than the persisted
+         * one, listed here so the guard above still catches an accidental type mismatch.
+         *
+         * `defaultPreviewMode` persists as the enum's id rather than the enum: an id that no
+         * longer exists (downgrade, hand-edited XML) then degrades to the default instead of
+         * failing to deserialise the whole settings object.
+         */
+        val TYPE_ADAPTING_ACCESSORS = setOf("defaultPreviewMode")
     }
 }

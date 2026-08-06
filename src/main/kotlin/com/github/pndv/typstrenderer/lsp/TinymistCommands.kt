@@ -372,7 +372,7 @@ internal object TinymistCommands {
      * `null` maps to [ExportPdfResult.Unavailable], which callers already handle by polling
      * until the right client appears.
      */
-    private fun getClient(project: Project, source: Path? = null): LspClient? {
+    internal fun getClient(project: Project, source: Path? = null): LspClient? {
         if (project.isDisposed) return null
         val clients =
             LspClientManager.getInstance(project)

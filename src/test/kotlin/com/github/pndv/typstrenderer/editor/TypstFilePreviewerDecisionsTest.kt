@@ -179,4 +179,99 @@ class TypstFilePreviewerDecisionsTest {
             ExportPdfResult.Exported(Path.of("/b.pdf")),
         )
     }
+
+    // ---- live-preview navigation intent ----
+
+    @Test
+    fun `a pane not in live mode never re-asserts`() { // desiredUrl is null outside live mode; re-asserting there would fight the PDF viewer
+        // for control of the browser.
+        assertFalse(shouldReassertLiveUrl("http://127.0.0.1:60344/", null))
+        assertFalse(shouldReassertLiveUrl(null, null))
+        assertFalse(shouldReassertLiveUrl("http://localhost:63342/typst-renderer/viewer/web/viewer.html", null))
+    }
+
+    @Test
+    fun `the live page committing is not a lost race`() {
+        val wanted =
+            "http://127.0.0.1:60344" // The browser reports the committed URL with a trailing slash the request lacked, so
+        // this must be a prefix match — equality would re-assert forever on every success.
+        assertFalse(shouldReassertLiveUrl("http://127.0.0.1:60344/", wanted))
+        assertFalse(shouldReassertLiveUrl(wanted, wanted))
+    }
+
+    @Test
+    fun `the splash page committing over the live page is a lost race`() { // The exact failure seen in the field: the browser's own deferred first load (a
+        // JBCefBrowser.loadHTML page, which reports as file:///jbcefbrowser/...) commits after
+        // our loadURL and aborts it, stranding the pane on "Compiling…" forever.
+        val wanted = "http://127.0.0.1:60344"
+        assertTrue(shouldReassertLiveUrl("file:///jbcefbrowser/488045838#url=about:blank", wanted))
+        assertTrue(shouldReassertLiveUrl("about:blank", wanted))
+        assertTrue(shouldReassertLiveUrl(null, wanted))
+        assertTrue(shouldReassertLiveUrl("", wanted))
+    }
+
+    @Test
+    fun `a different preview server's page is a lost race`() { // A stale task's page must not be mistaken for the current one — ports differ, and a
+        // prefix match on the host alone would accept the wrong server.
+        assertTrue(shouldReassertLiveUrl("http://127.0.0.1:60999/", "http://127.0.0.1:60344"))
+    }
+
+    @Test
+    fun `the selected live pane with a running task syncs its caret`() {
+        assertTrue(
+            shouldSyncPreviewToCaret(
+                mode = TypstPreviewMode.LIVE,
+                followCursor = true,
+                editorIsSelected = true,
+                hasLiveTask = true,
+            )
+        )
+    }
+
+    @Test
+    fun `a background tab never scrolls the preview`() { // The scroll is addressed to the task, so it reaches every pane sharing it. A tab the
+        // user is not looking at sending one would yank the pane they are reading to a position
+        // in a file they did not open — the whole reason for the selected-editor condition.
+        assertFalse(
+            shouldSyncPreviewToCaret(
+                mode = TypstPreviewMode.LIVE,
+                followCursor = true,
+                editorIsSelected = false,
+                hasLiveTask = true,
+            )
+        )
+    }
+
+    @Test
+    fun `the PDF renderer and the disabled setting both suppress the sync`() { // The PDF pane keeps its own scroll through the PDF.js bridge and has no task to address.
+        assertFalse(
+            shouldSyncPreviewToCaret(
+                mode = TypstPreviewMode.PDF,
+                followCursor = true,
+                editorIsSelected = true,
+                hasLiveTask = true,
+            )
+        )
+        assertFalse(
+            shouldSyncPreviewToCaret(
+                mode = TypstPreviewMode.LIVE,
+                followCursor = false,
+                editorIsSelected = true,
+                hasLiveTask = true,
+            )
+        )
+    }
+
+    @Test
+    fun `a pane holding no task does not try to scroll one`() { // A caret move must never be the thing that starts a preview: the pane is mid-cold-start
+        // or has fallen back, and there is no task id to address.
+        assertFalse(
+            shouldSyncPreviewToCaret(
+                mode = TypstPreviewMode.LIVE,
+                followCursor = true,
+                editorIsSelected = true,
+                hasLiveTask = false,
+            )
+        )
+    }
 }

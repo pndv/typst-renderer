@@ -2,7 +2,6 @@ package com.github.pndv.typstrenderer.lsp
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.github.pndv.typstrenderer.lsp.PlatformConfig.tinymistBaseUrl
 import com.intellij.openapi.diagnostic.logger
 import org.jetbrains.annotations.VisibleForTesting
 
@@ -111,9 +110,9 @@ object PlatformConfig {
     ) {
         fun toToolConfig(): ToolConfig {
             val map = LinkedHashMap<PlatformKey, PlatformEntry>()
-            for (entry in platforms) {
-                val key = PlatformKey(entry.os, entry.arch)
-                if (map.put(key, PlatformEntry(entry.asset, entry.archive)) != null) {
+            for ((os, arch, asset, archive) in platforms) {
+                val key = PlatformKey(os, arch)
+                if (map.put(key, PlatformEntry(asset, archive)) != null) {
                     LOG.warn("platforms.json: duplicate entry for $key — later entry wins")
                 }
             }

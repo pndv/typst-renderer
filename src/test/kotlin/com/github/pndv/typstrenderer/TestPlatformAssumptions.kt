@@ -18,7 +18,7 @@ private val LOG = Logger.getInstance("com.github.pndv.typstrenderer.TestPlatform
  * Any test that exercises those extensions therefore cannot run there.
  *
  * The real IDE ships lucene and is unaffected — the JetBrains Plugin Verifier reports the plugin
- * Compatible with IU-262.8665.258 — so this is a gap in the test artifact, not a defect in the
+ * Compatible with IU-262.8665.258 — so this is a gap in the test artefact, not a defect in the
  * plugin. Gating keeps `./gradlew check` green without masking real regressions; these tests run in
  * full again automatically once JetBrains ships a complete 262 test framework (the predicate then
  * returns `true` and nothing is gated).

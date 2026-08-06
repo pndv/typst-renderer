@@ -114,6 +114,15 @@
             <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="Typst.PinMainFile"/>
         </action>
 
+        <!-- Also constructed directly by TypstSplitEditor for its preview toolbar. Registered
+             here as well so it is findable in Search Everywhere / Find Action and can be given
+             a keyboard shortcut; that copy resolves the pane from the focused editor. -->
+        <action id="Typst.TogglePreviewMode"
+                class="com.github.pndv.typstrenderer.actions.TypstTogglePreviewModeAction"
+                icon="AllIcons.Actions.Lightning">
+            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="Typst.UnpinMainFile"/>
+        </action>
+
         <!-- Attached as a left-edge toolbar, the toolbar is then set to SimpleToolWindowPanel.
              Registered here (rather than created inline in the factory) so they're discoverable from the action search
              palette and can be assigned keyboard shortcuts by the user. -->

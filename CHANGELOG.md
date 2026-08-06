@@ -6,6 +6,26 @@
 
 ### Added
 
+- **Live preview that updates as you type.** The preview pane can now render through tinymist's own preview engine
+  instead of exporting a PDF and displaying it. Edits appear in the pane within a few milliseconds of the keystroke — no
+  save, no export, and only the changed part of the page is redrawn. A **Live / PDF** toggle in the preview toolbar
+  chooses the renderer per editor tab, so several `.typ` files can be open in different modes; the new *Default preview
+  mode* setting picks what a freshly opened tab starts in. Live preview is the default. If it cannot start — an old
+  tinymist, a refused port — the pane falls back to the PDF renderer on its own and says so in the Typst Output console.
+  **Compile** and **Export** write a PDF and report to the console whichever renderer the pane is using, and never
+  switch it: a pane in PDF mode reloads, a pane in Live mode carries on rendering live (issue #109).
+
+- **Editors showing the same document share one live preview.** With a main entry pinned, every open chapter compiles
+  through that main, so they all display the same document — one render serves them all, started when the first such tab
+  opens and stopped when the last one closes. With no main entry pinned, every file gets its own live preview, as do
+  `.typ` files outside the project (issue #109).
+
+- **The live preview follows the cursor.** It scrolls to the part of the document you are editing, and keeps up as you
+  move around or switch tabs — so clicking a spot in the preview to jump to its source lands the preview there too,
+  rather than at the top of the document. Turn it off with *Scroll the live preview to follow the cursor* in Settings >
+  Tools > Typst. Note that editors sharing one live preview scroll together, since the scroll is a property of the
+  shared render (issue #109).
+
 - **Pin a main entry file for multi-file projects.** In a project where `main.typ` `#include`s a tree of chapter files,
   opening a chapter on its own used to compile it in isolation, so every cross-file reference (`@ch:cases` pointing at a
   label declared elsewhere) reported "label does not exist" — errors that vanished only when `main.typ` was reopened.
@@ -36,6 +56,15 @@
 
 ### Changed
 
+- **Saving no longer writes a PDF while the preview is in Live mode.** Previously the preview refreshed by exporting, so
+  every save left an updated PDF in the export directory (`target/` by default) as a side effect. A live preview renders
+  without producing a file, so with the new default the PDF on disk is written only when you ask for one — **Compile**
+  (<kbd>Ctrl+Shift+T</kbd>) or **Export**. If you relied on save-writes-a-PDF (a build script watching
+  `target/`, an external viewer open on the file), switch the preview toolbar toggle to **PDF**, or set *Default preview
+  mode* to *PDF* to restore the previous behaviour everywhere.
+- **The preview follows your typing rather than your saves.** In Live mode the pane no longer waits for
+  <kbd>Ctrl+S</kbd>. It can be put back on a save cadence with the *Update live preview on every keystroke* setting
+  without leaving Live mode.
 - The bundled tinymist language server is now pinned to **v0.15.2** (from v0.14.18). Users who already have an
   auto-downloaded tinymist keep their existing binary — the new pin applies to fresh downloads.
 
@@ -212,7 +241,7 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 
 - Sandbox builds switched from `intellijIdeaUltimate` to `intellijIdea`.
 - Mockito-Kotlin added as a test dependency.
-- `downloadSources = true` added for IntelliJ Platform artifacts.
+- `downloadSources = true` added for IntelliJ Platform artefacts.
 
 ## [0.2.0] - 2026-05-21
 

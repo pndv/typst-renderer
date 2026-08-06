@@ -146,7 +146,7 @@ class TinymistCommandsTest {
     fun `formatExportError lifts the quoted payload and unescapes it`() { // Shape tinymist actually returns: a Rust source-location prefix, then the
         // typst diagnostic Debug-escaped inside double-quotes (literal \n and \\).
         val raw =
-            """crates\tinymist\src\task\export.rs:579:17: ExportTask(0): """ + """document is not available for export: "error: label occurs twice\n  ┌─ d:\\Projects\\ru-hi\\file.typ:6:59\n""""
+            """crates\tinymist\src\task\export.rs:579:17: ExportTask(0): """ + """document is not available for export: "error: label occurs twice\n  ┌─ d:\\Projects\\sample-doc\\file.typ:6:59\n""""
         val formatted = TinymistCommands.formatExportError(raw)
         val lines = formatted.lines()
 
@@ -157,7 +157,7 @@ class TinymistCommandsTest {
                 it.trimStart().startsWith("┌─")
             }) // Backslashes un-doubled so Path.of resolves the Windows path.
         assertTrue(
-            "single backslashes: $formatted", formatted.contains("""d:\Projects\ru-hi\file.typ""")
+            "single backslashes: $formatted", formatted.contains("""d:\Projects\sample-doc\file.typ""")
         ) // The Rust source-location wrapper is gone — its \task must NOT become a tab.
         assertTrue("wrapper stripped: $formatted", !formatted.contains("export.rs"))
         assertTrue("no stray tab from wrapper: $formatted", !formatted.contains('\t'))
