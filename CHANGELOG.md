@@ -20,11 +20,16 @@
   opens and stopped when the last one closes. With no main entry pinned, every file gets its own live preview, as do
   `.typ` files outside the project (issue #109).
 
-- **The live preview follows the cursor.** It scrolls to the part of the document you are editing, and keeps up as you
-  move around or switch tabs — so clicking a spot in the preview to jump to its source lands the preview there too,
-  rather than at the top of the document. Turn it off with *Scroll the live preview to follow the cursor* in Settings >
-  Tools > Typst. Note that editors sharing one live preview scroll together, since the scroll is a property of the
-  shared render (issue #109).
+- **The live preview follows the cursor.** It scrolls to the part of the document you are editing, keeps up as you move
+  around, and re-syncs when you switch back to a tab — so the preview shows the passage you are working on rather than
+  wherever you last left it. Turn it off with *Scroll the live preview to follow the cursor* in Settings > Tools >
+  Typst. Two things to know: editors sharing one live preview scroll together, because the scroll belongs to the shared
+  render rather than to a pane; and a file opened for the very first time has its cursor at the start, so the preview
+  begins at the top of the document until you move it (issue #109).
+
+- **Click the preview to jump to the source.** Clicking a spot in the live preview takes the editor to the matching
+  place in the `.typ` file that produced it, opening the file if it is not already open — useful in a multi-file
+  project, where the passage you are looking at often lives in a chapter you do not have in front of you (issue #109).
 
 - **Pin a main entry file for multi-file projects.** In a project where `main.typ` `#include`s a tree of chapter files,
   opening a chapter on its own used to compile it in isolation, so every cross-file reference (`@ch:cases` pointing at a
@@ -37,6 +42,10 @@
 
 ### Fixed
 
+- **tinymist is no longer re-downloaded after every plugin update.** The managed binary was kept inside the plugin's
+  own installation folder, which an update deletes and replaces, so each upgrade silently threw it away and downloaded
+  it again. It now lives alongside the IDE's other cached data and survives updates. Upgrading to this version
+  downloads it once more, into the new location.
 - The preview no longer gets stuck on "Compiling…" after a compile fails. A failed compile now keeps its error pane on
   screen until the next successful compile, instead of being painted over by the waiting splash and hiding the
   diagnostic (issue #98).
@@ -65,6 +74,16 @@
 - **The preview follows your typing rather than your saves.** In Live mode the pane no longer waits for
   <kbd>Ctrl+S</kbd>. It can be put back on a save cadence with the *Update live preview on every keystroke* setting
   without leaving Live mode.
+- **A compile error leaves the Live preview showing the last good version, not an error page.** The live renderer keeps
+  the most recent successful render, so a document that has never compiled shows an empty pane instead of a message.
+  The errors themselves are unaffected — they appear in the editor gutter and in the **Typst Output** console as
+  before. Switch the pane to **PDF** for the previous behaviour, where a failed compile replaces the preview with an
+  error page.
+- **Jumping from the preview to the source does not move the keyboard focus** when the target file is already open in
+  front of you: the line is highlighted, but the cursor stays where it was and typing still goes to the preview. Click
+  into the editor to carry on. Jumping to a file that is *not* already open behaves normally, placing the cursor and
+  moving focus with it. This is the IDE's handling of the language server's request rather than a limit of Typst
+  itself, and it is being tracked for a follow-up.
 - The bundled tinymist language server is now pinned to **v0.15.2** (from v0.14.18). Users who already have an
   auto-downloaded tinymist keep their existing binary — the new pin applies to fresh downloads.
 

@@ -697,6 +697,25 @@ class TypstFilePreviewer(
      * Subscribes to the global caret multicaster and filters down to this file rather than
      * hunting for the [com.intellij.openapi.editor.Editor] instance, which does not exist yet
      * when this previewer is constructed and is replaced whenever the tab is reopened.
+     *
+     * One of three triggers that scroll the preview, alongside [listenForTabSelection] and the
+     * page-load sync in the `onLoadEnd` handler. All three go through [requestCaretSync], so the
+     * rule is the same wherever it fires: show the position of the caret in the file being read.
+     * The two companions exist because a caret move alone leaves gaps — switching tabs moves no
+     * caret, and a pane whose page has just loaded is showing the top of the document regardless
+     * of where its editor sits.
+     *
+     * Two properties to know before changing any of them:
+     *
+     *  - `tinymist.scrollPreview` addresses a **task**, not a connection, so with a main file
+     *    pinned one scroll moves every pane sharing that task. That is why [requestCaretSync]
+     *    sends only from the selected editor — a background tab would otherwise drag the pane the
+     *    reader is looking at to a position in a file they never opened.
+     *  - A file opened for the **first time** in a session has its caret at 0:0, so a sync
+     *    triggered by that open scrolls to the top of the document rather than to the chapter.
+     *    IntelliJ restores the caret for any file opened before, so this bites only on a genuine
+     *    first visit; distinguishing "never been read" from "read, and this is where" is what a
+     *    fix would need.
      */
     private fun listenForCaretMoves() {
         EditorFactory.getInstance().eventMulticaster.addCaretListener(object : CaretListener {

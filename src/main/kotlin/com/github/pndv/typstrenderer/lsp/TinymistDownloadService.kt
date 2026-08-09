@@ -35,7 +35,7 @@ internal sealed interface DownloadAttempt {
     /** Another download is already running; this request is redundant. */
     data object AlreadyRunning : DownloadAttempt
 
-    /** The last attempts failed and the back-off window has not elapsed. */
+    /** The last attempt failed, and the back-off window has not elapsed. */
     data class BackOff(val remainingMs: Long) : DownloadAttempt
 }
 

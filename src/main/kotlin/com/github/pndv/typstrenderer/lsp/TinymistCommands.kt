@@ -21,12 +21,12 @@ import java.util.concurrent.CompletionException
  * Outcome of a [TinymistCommands.exportPdf] call.
  *
  * Tinymist signals a failed export as a JSON-RPC *error response*, not a null
- * result — the formatted diagnostic (the same `error: …` text the standalone
+ * result — the formatted diagnostic (the same `error: ` text the standalone
  * typst CLI printed to stderr) rides in that error's message. We surface it
- * rather than discarding it: in multi-file projects the failing diagnostic
+ * rather than discarding it. In multi-file projects the failing diagnostic
  * often belongs to an `#include`-d chapter file the user does not have focused,
- * so the editor gutter on the focused entry file shows nothing and the console
- * would otherwise be the user's only signal — yet carry only a generic message.
+ * so the editor gutter on the focused entry file shows nothing. The console
+ * would otherwise be the user's only signal — which only carries a generic message.
  */
 internal sealed interface ExportPdfResult {
     /** tinymist wrote the PDF; [pdf] is the absolute path it reported. */

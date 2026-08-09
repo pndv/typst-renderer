@@ -66,8 +66,14 @@ internal class TypstLivePreviewRegistry(private val project: Project) {
 
     /**
      * Registers [holderId] as a viewer of [target]'s preview, starting the task if it is not
-     * already running — or restarting it if the running one was started under a different theme,
-     * since colour inversion is fixed at start-up.
+     * already running — or restarting it if the running one was started under a different theme.
+     *
+     * The restart is unavoidable. `--invert-colors` is stored **per task** and re-sent verbatim to
+     * every viewer that connects, so a running task's inversion cannot be changed by reconnecting;
+     * only by killing it. Delegating the choice to the frontend instead (`--invert-colors auto`,
+     * which makes the page decide from `prefers-color-scheme`) was tried and reverted: JCEF did
+     * not report the new scheme to an already-open browser after an IDE theme switch, so the
+     * preview stayed inverted under a light theme.
      *
      * Returns the outcome of the underlying start. A join returns [PreviewStartResult.Started]
      * carrying the already-running task's session, so callers cannot tell (and need not care)

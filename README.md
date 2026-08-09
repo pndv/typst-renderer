@@ -10,11 +10,26 @@ diagnostics, zero-config setup.
 
 All features work out of the box — no manual installation of binaries required.
 
-### 📄 Live PDF Preview
+### 📄 Preview, live or as PDF
 
-A split editor panel shows the compiled PDF alongside your source. The PDF updates in place on every save, preserving
-scroll position within a session. Scroll position is also restored across IDE restarts when the option is enabled in
-settings.
+A split editor panel shows your document alongside the source, rendered one of two ways and chosen with the
+**Live / PDF** button in the preview toolbar:
+
+- **Live** (default) — rendered by tinymist as you type. Edits appear within milliseconds, with no save and no PDF
+  written to disk. The preview follows your cursor, and clicking it jumps the editor to the matching source.
+- **PDF** — the exported PDF itself, shown in the built-in viewer. Updates when you save, **Compile** or **Export**,
+  preserving scroll position within a session and, optionally, across IDE restarts.
+
+Each editor tab keeps its own setting, so one file can be live while another shows its PDF. **Compile** and **Export**
+never change which renderer a tab is using.
+
+### 📌 Pin a main entry file
+
+In a project where `main.typ` `#include`s a tree of chapters, opening a chapter on its own compiles it in isolation —
+so every cross-file reference reports "label does not exist". Right-click a file and choose **Pin as Typst Main File**
+and the whole project compiles through that entry instead: cross-references resolve, the phantom errors go, and the
+preview shows the complete document while you edit any chapter. Editors that resolve to the same pinned main share a
+single live preview rather than each running their own.
 
 ### ⚡ Full LSP Integration
 
@@ -49,7 +64,32 @@ On first use, the plugin auto-downloads **tinymist** from GitHub for your platfo
 
 ## Live Preview
 
-Edit and preview side by side. The split editor updates automatically on every save — no manual compile step needed.
+Edit and preview side by side, with the preview keeping up as you type — no save, no compile step.
+
+### Choosing the renderer
+
+The **Live / PDF** button at the top-left of the preview toolbar switches the pane between the two renderers, per
+editor tab. *Default preview mode* in settings decides what a newly opened tab starts with; **Live** is the default.
+The same action is available from the editor's right-click menu and from *Find Action*, so it can be given a keyboard
+shortcut.
+
+If a live preview cannot start — an old tinymist, a refused port — the pane falls back to the PDF renderer by itself
+and explains why in the **Typst Output** console.
+
+### Worth knowing
+
+- **In Live mode, saving no longer writes a PDF.** The live renderer draws without producing a file, so the PDF on
+  disk is written only when you ask for one with **Compile** (<kbd>Ctrl+Shift+T</kbd>) or **Export**. If you have a
+  build script watching the export directory, or an external viewer open on the file, switch the pane to **PDF** or set
+  *Default preview mode* to *PDF*.
+- **A compile error leaves the live pane showing the last good version.** A document that has never compiled shows an
+  empty pane rather than an error page. The errors are still reported in the editor gutter and the **Typst Output**
+  console. PDF mode shows an error page instead, if you prefer that.
+- **Clicking the preview jumps to the source.** If the target file is already open in front of you, the line is
+  highlighted but the cursor and keyboard focus stay in the preview — click into the editor to carry on typing.
+  Jumping to a file that is not already open places the cursor and moves focus normally.
+- **Editors showing the same document share one preview.** With a main file pinned, every open chapter renders through
+  a single preview rather than one each, so they also scroll together.
 
 ---
 
@@ -97,6 +137,9 @@ Access via **Settings → Tools → Typst Renderer**.
 | Setting                        | Description                                                                                                               |
 |--------------------------------|---------------------------------------------------------------------------------------------------------------------------|
 | **Language Server (Tinymist)** | Status shows detected path. Leave blank to auto-detect. Click *Download Tinymist* to fetch the latest binary from GitHub. |
+| **Default preview mode**       | Which renderer a newly opened preview starts in — **Live** or **PDF**. Each editor tab can be switched with the toggle in its preview toolbar. |
+| **Update live preview on every keystroke** | On by default. Turn off to have the live preview refresh on save instead — worth it only for very large documents, where continuous recompilation costs more than the immediacy. No effect in PDF mode. |
+| **Scroll the live preview to follow the cursor** | On by default. Keeps the preview on the passage you are editing. Editors sharing one preview scroll together. No effect in PDF mode. |
 | **Remember scroll position**   | Restores the PDF preview scroll position when re-opening a `.typ` file after an IDE restart.                              |
 
 ### Per-Project Overrides
@@ -140,9 +183,29 @@ No external tools required. The plugin handles everything on first launch.
 
 ## See it in action
 
-#### Live PDF preview — compiled PDF updates on every save, scroll position preserved*
+#### Live preview — the document re-renders as you type, with no save and no PDF written*
 
-![Live PDF Preview split view](screenshots/preview.png)
+![Live preview re-rendering as the source is typed](screenshots/live-preview.gif)
+
+*Still, if the animation above does not play:*
+
+![Split editor with Typst source on the left and the rendered document on the right](screenshots/live-preview.png)
+
+#### The Live / PDF button — switch renderer per editor tab, without leaving the pane*
+
+![Clicking the Live/PDF button to switch the preview between the live renderer and the exported PDF](screenshots/preview-toggle.gif)
+
+*Still, if the animation above does not play:*
+
+![Preview toolbar showing the Live/PDF button and its tooltip](screenshots/preview-toggle.png)
+
+#### Pin a main entry file — every chapter compiles through the whole document*
+
+![Editor context menu showing Pin as Typst Main File](screenshots/pin-main-file.png)
+
+#### PDF preview — the exported PDF itself, updated on compile, scroll position preserved*
+
+![PDF Preview split view](screenshots/preview.png)
 
 #### LSP completions and hover documentation powered by tinymist*
 

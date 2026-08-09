@@ -58,11 +58,11 @@ internal enum class PreviewRefreshStyle(val wireValue: String) {
  *
  * Inversion is done by the preview frontend rather than by us: it is how a light-background
  * document is made to sit comfortably in a dark IDE without recompiling the document itself.
- * Note the value is fixed when the task starts — an IDE theme switch needs the task restarted,
- * unlike the CSS tweak the PDF.js pane can apply in place.
+ * Note the value is fixed when the task starts — an IDE theme switch needs the task restarted.
+ * Unlike the CSS tweak, the PDF.js pane can apply in place.
  */
 internal enum class PreviewInvertColours(val wireValue: String) {
-    /** Never invert — the correct choice under a light IDE theme. */
+    /** Never invert the correct choice under a light IDE theme. */
     NEVER("never"),
 
     /** Let tinymist decide per element — the dark-theme choice. */
