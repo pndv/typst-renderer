@@ -12,9 +12,9 @@ data class PlatformKey(val os: String, val arch: String) {
 
     companion object {
         /**
-         * Normalizes the host's `os.name` / `os.arch` system properties into the
-         * canonical values used in `platforms.json` (`darwin` / `linux` / `windows`,
-         * `arm64` / `x64`). Returns null if either property is missing or unrecognised.
+         * Normalises the host's `os.name` / `os.arch` system properties into the
+         * canonical values used in `platforms.json` (`darwin` / `linux` / `windows`,`arm64` / `x64`).
+         * Returns null if either property is missing or unrecognised.
          */
         fun currentHost(
             osName: String? = System.getProperty("os.name"),

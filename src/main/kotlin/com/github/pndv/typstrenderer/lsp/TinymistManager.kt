@@ -30,9 +30,19 @@ class TinymistManager {
 
     /**
      * Returns the directory where the downloaded tinymist binary is stored.
+     *
+     * Under the IDE's **system** directory rather than inside the plugin's own installation
+     * folder. Installing a plugin update deletes that folder and unpacks the new distribution in
+     * its place, taking anything not in the distribution with it — so the binary was thrown away
+     * on every update and silently downloaded again, a missing binary being indistinguishable
+     * from a first run. The system directory survives updates, and is where downloaded tooling
+     * belongs.
+     *
+     * No migration from the old location: the same deletion that caused the bug guarantees there
+     * is nothing left to move by the time this version runs.
      */
     fun getDownloadDir(): File {
-        val dir = File(PathManager.getPluginsPath(), "typst-renderer${File.separator}bin")
+        val dir = File(PathManager.getSystemPath(), "typst-renderer${File.separator}bin")
         dir.mkdirs()
         return dir
     }

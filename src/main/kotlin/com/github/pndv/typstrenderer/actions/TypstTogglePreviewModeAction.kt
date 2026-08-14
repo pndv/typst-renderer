@@ -5,13 +5,20 @@ import com.github.pndv.typstrenderer.editor.TypstFilePreviewer
 import com.github.pndv.typstrenderer.editor.TypstPreviewMode
 import com.github.pndv.typstrenderer.editor.TypstSplitEditor
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.ActionToolbar
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.PlatformDataKeys
+import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.ToggleAction
+import com.intellij.openapi.actionSystem.ex.CustomComponentAction
+import com.intellij.openapi.actionSystem.impl.ActionButtonWithText
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.DumbAware
+import com.intellij.util.ui.JBUI
+import java.awt.Insets
+import javax.swing.JComponent
 
 /**
  * Toggles a Typst preview pane between the live tinymist renderer and the PDF.js renderer.
@@ -29,11 +36,28 @@ import com.intellij.openapi.project.DumbAware
  */
 class TypstTogglePreviewModeAction(
     private val boundPreviewer: TypstFilePreviewer? = null,
-) : ToggleAction(), DumbAware {
+) : ToggleAction(), CustomComponentAction, DumbAware {
 
     private val log = logger<TypstTogglePreviewModeAction>()
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+    /**
+     * Renders the toggle as a button carrying its label, not a bare icon.
+     *
+     * A [ToggleAction] in a toolbar is drawn as an icon whose only state is a subtle pressed
+     * background, which put the single control that chooses the renderer somewhere users did not
+     * find it — and, once found, did not say which mode was active. Showing the text makes the
+     * current mode readable at a glance, which is the whole job of this control.
+     *
+     * Only affects toolbar presentation; the *Find Action* and context-menu copies are unchanged.
+     */
+    override fun createCustomComponent(presentation: Presentation, place: String): JComponent =
+        object : ActionButtonWithText(this, presentation, place, ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE) {
+            // Keep the label from being clipped to the icon-sized default when the text is the
+            // point of the control.
+            override fun getInsets(): Insets = JBUI.insets(2, 6)
+        }
 
     /** The toolbar's own pane when bound, otherwise whichever Typst editor currently has focus. */
     private fun resolvePreviewer(e: AnActionEvent): TypstFilePreviewer? =
