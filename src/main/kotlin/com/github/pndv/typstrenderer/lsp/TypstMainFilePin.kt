@@ -96,7 +96,7 @@ internal object TypstMainFilePinner {
                 when {
                     mainFile != null -> {
                         val mainPath = Path.of(mainFile)
-                        if (awaitServerReady(project, mainPath)) {
+                        if (awaitClientReady(project, mainPath)) {
                             log.debug { "Sending tinymist.pinMain($mainPath) for project ${project.name}" }
                             TinymistCommands.pinMain(project, mainPath)
                         } else {
@@ -126,11 +126,11 @@ internal object TypstMainFilePinner {
      * Polls until the tinymist client that claims [source] reports `Running`, or the
      * timeout elapses. Returns `true` if it became ready. Runs only on a pooled thread.
      */
-    private fun awaitServerReady(project: Project, source: Path): Boolean {
+    private fun awaitClientReady(project: Project, source: Path): Boolean {
         val deadline = System.currentTimeMillis() + READY_TIMEOUT_MS
         while (System.currentTimeMillis() < deadline) {
             if (project.isDisposed) return false
-            if (TinymistCommands.isServerReady(project, source)) return true
+            if (TinymistCommands.isClientReady(project, source)) return true
             try {
                 Thread.sleep(READY_POLL_INTERVAL_MS)
             } catch (e: InterruptedException) {
@@ -139,7 +139,7 @@ internal object TypstMainFilePinner {
                 return false
             }
         }
-        return TinymistCommands.isServerReady(project, source)
+        return TinymistCommands.isClientReady(project, source)
     }
 }
 

@@ -340,22 +340,35 @@ internal object TinymistCommands {
      */
     @RequiresBackgroundThread
     fun getServerInfo(project: Project): Any? {
-        val server = getClient(project) ?: return null
-        return server.sendRequestSync { server4j ->
-            server4j.workspaceService.executeCommand(buildGetServerInfoParams())
+        val client = getClient(project) ?: return null
+        return client.sendRequestSync { ls ->
+            ls.workspaceService.executeCommand(buildGetServerInfoParams())
         }
     }
 
     /**
-     * Returns `True` only when a tinymist server that claims [source] is attached AND
+     * Returns `True` only when a tinymist client that claims [source] is attached AND
      * finished initialising. With the project-wide and external-file clients coexisting,
-     * "some server is running" is not enough — the readiness poll must wait for the one
+     * "some client is running" is not enough — the readiness poll must wait for the one
      * that will actually take the export.
      */
-    fun isServerReady(project: Project, source: Path): Boolean {
-        val server = getClient(project, source) ?: return false
-        return server.state == LspServerState.Running
+    fun isClientReady(project: Project, source: Path): Boolean {
+        val client = getClient(project, source) ?: return false
+        return client.state == LspServerState.Running
     }
+
+    /**
+     * Whether any tinymist client is attached to [project], without resolving a file to one.
+     *
+     * For availability gates only. An action deciding whether to enable itself is polled on every
+     * update and runs where [getClient]'s refreshing VFS lookup is not affordable — and it does not
+     * need the precision: the answer only has to be good enough to light up a menu item. Anything
+     * that actually sends a request must route through [getClient], so it talks to the client that
+     * claims the file rather than whichever one happens to be first.
+     */
+    internal fun hasAnyClient(project: Project): Boolean = !project.isDisposed && LspClientManager.getInstance(project)
+        .getClients(TinymistLspServerSupportProvider::class.java)
+        .isNotEmpty()
 
     /**
      * Locates the tinymist client responsible for [source].

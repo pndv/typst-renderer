@@ -45,9 +45,21 @@
         <postStartupActivity
                 implementation="com.github.pndv.typstrenderer.lsp.TypstExternalFileLspStartupActivity"/>
 
-        <!-- Rename via LSP (IntelliJ's LSP module does not support textDocument/rename) -->
+        <!-- Symbol rename via LSP (IntelliJ's LSP module does not support textDocument/rename).
+             Editor-only by design: file rename has no caret to resolve a symbol from, so this
+             handler declines editor-less contexts and lets the platform's own handler rename
+             the file. Claiming them instead makes file rename a silent no-op, because the
+             platform only falls back to its default handler when nothing else claims. -->
         <renameHandler implementation="com.github.pndv.typstrenderer.lsp.TypstLspRenameHandler"
                        id="TypstLspRenameHandler" order="first"/>
+
+        <!-- File rename: the platform moves the file, tinymist supplies the import rewrites.
+             Must be order="first" — RenameProcessor.performRefactoring dispatches renameElement to
+             the *first* processor whose canProcessElement matches, so a later position would let
+             the platform's own RenamePsiFileProcessor answer instead and the imports would go
+             stale. prepareRenaming, by contrast, runs on every matching processor. -->
+        <renamePsiElementProcessor implementation="com.github.pndv.typstrenderer.lsp.TypstRenameFileProcessor"
+                                   id="TypstRenameFileProcessor" order="first"/>
 
 
         <!-- Settings -->

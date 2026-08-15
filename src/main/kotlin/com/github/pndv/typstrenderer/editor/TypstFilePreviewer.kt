@@ -557,7 +557,7 @@ class TypstFilePreviewer(
         val dark = isDarkTheme()
         when (val readiness =
             decideExportReadiness(
-                TinymistCommands.isServerReady(project, target),
+                TinymistCommands.isClientReady(project, target),
                 pollCount,
                 MAX_SERVER_POLLS
             )) { // Already serving this exact target under this theme: keep the task and the scroll
@@ -807,7 +807,7 @@ class TypstFilePreviewer(
     private fun exportWhenReady(pollCount: Int) {
         if (project.isDisposed || !file.isValid) return
         val isReady = decideExportReadiness(
-            TinymistCommands.isServerReady(
+            TinymistCommands.isClientReady(
                 project, resolveTypstExportTarget(project, file)
             ), pollCount, MAX_SERVER_POLLS
         )
@@ -912,7 +912,7 @@ class TypstFilePreviewer(
      */
     private fun handleUnavailable(attempt: Int) {
         when (val decision = decideUnavailableAction(
-            TinymistCommands.isServerReady(project, resolveTypstExportTarget(project, file)),
+            TinymistCommands.isClientReady(project, resolveTypstExportTarget(project, file)),
             attempt,
             MAX_EXPORT_RETRIES
         )) {
