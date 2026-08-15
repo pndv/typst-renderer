@@ -1,5 +1,6 @@
 package com.github.pndv.typstrenderer.lsp
 
+import com.github.pndv.typstrenderer.pluginRegisteredInTestPlatform
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
@@ -16,6 +17,8 @@ import com.intellij.platform.lsp.api.LspClient
 import com.intellij.platform.lsp.api.LspClientDescriptor
 import com.intellij.platform.lsp.api.LspIntegrationProvider
 import com.intellij.platform.lsp.api.LspServerState
+import com.intellij.refactoring.rename.PsiElementRenameHandler
+import com.intellij.refactoring.rename.RenameHandlerRegistry
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -26,10 +29,13 @@ import java.util.concurrent.CompletableFuture
 /**
  * Unit tests for [TypstLspRenameHandler].
  *
- * Scope: exercises pure-logic helpers and the `isAvailableOnDataContext` gate.
- * End-to-end rename flow tests (covering `prepareRename`/`rename` LSP requests,
- * timeout handling, multi-file edits via `documentChanges`, etc.) require a
- * mocked LSP server and are deferred to Batch 3 of the test-coverage plan.
+ * Covers the pure-logic helpers, the `isAvailableOnDataContext` gate, and the rename flow itself
+ * driven through [TypstLspRenameHandler.performRenameWithClient] against [FakeLspClient].
+ *
+ * What cannot be covered here is anything needing a live tinymist: no client starts in a fixture,
+ * because the platform gates `fileOpened` on `ProjectFileIndex.isInContent` while fixture files
+ * live in the out-of-content `temp://` VFS. Response shapes used by the fake are taken from
+ * tinymist's own source rather than guessed.
  */
 class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
@@ -46,10 +52,25 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         assertFalse(handler.isAvailableOnDataContext(ctx))
     }
 
-    // Note: A "typst file + no LSP server → false" test is not reliable here because the
-    // IntelliJ platform's LSP bridge auto-registers a server for the Tinymist provider when
-    // a .typ file is opened in the test fixture, making findLspClient() return non-null.
-    // That branch is better covered by a Batch 3 integration test with a controllable LSP mock.
+    /**
+     * No tinymist client ever starts in the fixture — the platform gates `fileOpened` on
+     * `ProjectFileIndex.isInContent` and fixture files live in the out-of-content `temp://` VFS —
+     * so an otherwise-complete symbol-rename context still yields `false` here.
+     */
+    fun testIsAvailable_whenTypstFileInEditorButNoLspClient_returnsFalse() {
+        if (!pluginRegisteredInTestPlatform()) return
+        val psiFile = myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val ctx =
+            SimpleDataContext.builder()
+                .add(CommonDataKeys.PROJECT, project)
+                .add(CommonDataKeys.VIRTUAL_FILE, psiFile.virtualFile)
+                .add(CommonDataKeys.EDITOR, myFixture.editor)
+                .build()
+
+        assertNotNull("precondition: the context is a symbol-rename context", handler.typstFileForSymbolRename(ctx))
+        assertFalse(handler.isAvailableOnDataContext(ctx))
+    }
+
     fun testIsAvailable_whenNoVirtualFileInContext_returnsFalse() {
         val ctx = SimpleDataContext.builder()
             .add(CommonDataKeys.PROJECT, project)
@@ -65,6 +86,82 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
             .build()
 
         assertFalse(handler.isAvailableOnDataContext(ctx))
+    }
+
+    /**
+     * Regression test: renaming a `.typ` file from the Project view used to be a silent no-op.
+     *
+     * That context carries the file but no editor. This handler claimed it anyway, and because
+     * `RenameHandlerRegistry` only falls back to its default `PsiElementRenameHandler` when *no*
+     * registered handler reports availability, the platform's file rename never ran; it dispatched
+     * to the element-based `invoke()` overload instead, which cannot rename a file.
+     */
+    fun testIsAvailable_whenTypstFileButNoEditor_returnsFalse() {
+        if (!pluginRegisteredInTestPlatform()) return
+        val psiFile = myFixture.configureByText("test.typ", "#let foo = 1")
+        val ctx =
+            SimpleDataContext.builder()
+                .add(CommonDataKeys.PROJECT, project)
+                .add(CommonDataKeys.VIRTUAL_FILE, psiFile.virtualFile)
+                .add(CommonDataKeys.PSI_ELEMENT, psiFile)
+                .build()
+
+        assertFalse(
+            "A Typst file with no editor is a file rename; the platform handler must own it",
+            handler.isAvailableOnDataContext(ctx),
+        )
+    }
+
+    /**
+     * Positive control for the editor-less test above.
+     *
+     * This exercises [TypstLspRenameHandler.typstFileForSymbolRename] rather than
+     * `isAvailableOnDataContext`, because the latter additionally requires a live tinymist client
+     * and no tinymist client ever starts in the fixture: the platform gates `fileOpened` on
+     * `ProjectFileIndex.isInContent`, and fixture files live in the out-of-content `temp://` VFS.
+     */
+    fun testTypstFileForSymbolRename_withEditorOnTypstFile_returnsFile() {
+        if (!pluginRegisteredInTestPlatform()) return
+        val psiFile = myFixture.configureByText("test.typ", "#let foo<caret> = 1")
+        val ctx =
+            SimpleDataContext.builder()
+                .add(CommonDataKeys.PROJECT, project)
+                .add(CommonDataKeys.VIRTUAL_FILE, psiFile.virtualFile)
+                .add(CommonDataKeys.EDITOR, myFixture.editor)
+                .build()
+
+        assertEquals(
+            "A Typst file open in an editor is a symbol rename; this handler must claim it",
+            psiFile.virtualFile,
+            handler.typstFileForSymbolRename(ctx),
+        )
+    }
+
+    /** The file-rename context that used to be swallowed, checked at the gate itself. */
+    fun testTypstFileForSymbolRename_withoutEditor_returnsNull() {
+        if (!pluginRegisteredInTestPlatform()) return
+        val psiFile = myFixture.configureByText("test.typ", "#let foo = 1")
+        val ctx =
+            SimpleDataContext.builder()
+                .add(CommonDataKeys.PROJECT, project)
+                .add(CommonDataKeys.VIRTUAL_FILE, psiFile.virtualFile)
+                .add(CommonDataKeys.PSI_ELEMENT, psiFile)
+                .build()
+
+        assertNull(handler.typstFileForSymbolRename(ctx))
+    }
+
+    /** The gate resolves the file from the editor, so a non-Typst editor is declined. */
+    fun testTypstFileForSymbolRename_withEditorOnNonTypstFile_returnsNull() {
+        val psiFile = myFixture.configureByText("test.txt", "not a typst file")
+        val ctx =
+            SimpleDataContext.builder()
+                .add(CommonDataKeys.PROJECT, project)
+                .add(CommonDataKeys.VIRTUAL_FILE, psiFile.virtualFile)
+                .add(CommonDataKeys.EDITOR, myFixture.editor)
+                .build()
+
+        assertNull(handler.typstFileForSymbolRename(ctx))
     }
 
     fun testOffsetToLspPosition_atLineStart_returnsZeroCharacter() {
@@ -113,6 +210,31 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         // "foo_bar" starts on line 1 char 0, ends line 1 char 7
         val range = Range(Position(1, 0), Position(1, 7))
         assertEquals("foo_bar", handler.extractCurrentName(range, doc))
+    }
+
+    // LSP4J wraps the prepareRename response in an Either3. Unwrapping it is what keeps the
+    // dialog seeded with the server's placeholder instead of a naive word scan at the caret.
+    fun testExtractCurrentName_fromEither3PrepareRenameResult_returnsPlaceholder() {
+        val wrapped = Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
+            PrepareRenameResult(Range(Position(0, 9), Position(0, 14)), "A.typ")
+        )
+        assertEquals("A.typ", handler.extractCurrentName(wrapped, DocumentImpl("anything")))
+    }
+
+    fun testExtractCurrentName_fromEither3Range_extractsDocumentSlice() {
+        val doc = DocumentImpl("#import \"A.typ\": *")
+        val wrapped = Either3.forFirst<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
+            Range(Position(0, 9), Position(0, 14))
+        )
+        assertEquals("A.typ", handler.extractCurrentName(wrapped, doc))
+    }
+
+    /** The default-behaviour arm carries no name, so the caller falls back to the caret word. */
+    fun testExtractCurrentName_fromEither3DefaultBehaviour_returnsNull() {
+        val wrapped = Either3.forThird<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
+            PrepareRenameDefaultBehavior(true)
+        )
+        assertNull(handler.extractCurrentName(wrapped, DocumentImpl("anything")))
     }
 
     fun testExtractCurrentName_fromUnknownType_returnsNull() {
@@ -215,7 +337,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
                     uri to listOf(TextEdit(Range(Position(0, 5), Position(0, 8)), "bar"))
                 )
             )
-            val fakeServer = FakeLspClient(
+            val fakeClient = FakeLspClient(
                 Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                     PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
                 ),
@@ -223,7 +345,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
             )
             TestDialogManager.setTestInputDialog { "bar" }
 
-            handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+            handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
 
             val doc = FileDocumentManager.getInstance().getDocument(vf as VirtualFile)!!
             assertEquals("#let bar = 1", doc.text)
@@ -264,7 +386,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
                     )
                 ),
             )
-            val fakeServer = FakeLspClient(
+            val fakeClient = FakeLspClient(
                 Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                     PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
                 ),
@@ -272,7 +394,7 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
             )
             TestDialogManager.setTestInputDialog { "bar" }
 
-            handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+            handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
 
             val doc1 = FileDocumentManager.getInstance().getDocument(vf1 as VirtualFile)!!
             val doc2 = FileDocumentManager.getInstance().getDocument(vf2 as VirtualFile)!!
@@ -286,33 +408,33 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
 
     fun testRename_userCancelsDialog_noChangesApplied() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspClient(
+        val fakeClient = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
         )
         TestDialogManager.setTestInputDialog { null }
 
-        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+        handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
 
-        assertEquals(1, fakeServer.callCount)  // only prepareRename was called
+        assertEquals(1, fakeClient.callCount)  // only prepareRename was called
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
     fun testRename_prepareRenameReturnsNull_showsInfoNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspClient(null)
+        val fakeClient = FakeLspClient(null)
         TestDialogManager.setTestDialog(TestDialog.OK)
 
-        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+        handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
 
-        assertEquals(1, fakeServer.callCount)
+        assertEquals(1, fakeClient.callCount)
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
     fun testRename_renameRequestThrows_showsErrorNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspClient(
+        val fakeClient = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -321,15 +443,15 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         TestDialogManager.setTestDialog(TestDialog.OK)
         TestDialogManager.setTestInputDialog { "bar" }
 
-        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+        handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
 
-        assertEquals(2, fakeServer.callCount)
+        assertEquals(2, fakeClient.callCount)
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
     fun testRename_renameReturnsNullWorkspaceEdit_showsInfoNoChanges() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspClient(
+        val fakeClient = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -338,19 +460,19 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         TestDialogManager.setTestDialog(TestDialog.OK)
         TestDialogManager.setTestInputDialog { "bar" }
 
-        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+        handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
 
-        assertEquals(2, fakeServer.callCount)
+        assertEquals(2, fakeClient.callCount)
         assertEquals("#let foo = 1", myFixture.editor.document.text)
     }
 
-    fun testRename_workspaceEditWithResourceOperations_skipsUnsupportedOps() {
+    fun testRename_resourceOperationForMissingFile_isSkippedNotThrown() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
         val workspaceEdit = WorkspaceEdit()
         workspaceEdit.documentChanges = listOf(
-            Either.forRight(RenameFile("file:///old.typ", "file:///new.typ")),
+            Either.forRight(RenameFile("file:///nonexistent/old.typ", "file:///nonexistent/new.typ")),
         )
-        val fakeServer = FakeLspClient(
+        val fakeClient = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
@@ -358,23 +480,247 @@ class TypstLspRenameHandlerTest : BasePlatformTestCase() {
         )
         TestDialogManager.setTestInputDialog { "bar" }
 
-        // Must not throw; resource ops are silently skipped
-        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+        // A file the VFS cannot resolve is logged and skipped rather than throwing.
+        handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
+    }
+
+    /**
+     * With the caret on an import path, tinymist returns the path rewrites *and* a RenameFile
+     * resource operation. Dropping the latter used to leave every rewritten import pointing at a
+     * file that no longer existed, which breaks the build — a partial write is worse than none.
+     */
+    fun testRename_importPathEdit_appliesTextEditsAndRenamesFile() {
+        val dir = Files.createTempDirectory("typst-rename-import")
+        val target = dir.resolve("A.typ")
+        val dependent = dir.resolve("B.typ")
+        try {
+            Files.writeString(target, "#let greeting = 1")
+            Files.writeString(dependent, "#import \"A.typ\": *")
+            val targetVf = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(target)
+            } ?: fail("Could not resolve A.typ in VFS")
+            val dependentVf = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(dependent)
+            } ?: fail("Could not resolve B.typ in VFS")
+
+            // Exactly the shape tinymist emits: text edits first, the file rename last.
+            val workspaceEdit = WorkspaceEdit()
+            workspaceEdit.documentChanges = listOf(
+                Either.forLeft(
+                    TextDocumentEdit(
+                        VersionedTextDocumentIdentifier(dependent.toUri().toString(), 0),
+                        listOf(TextEdit(Range(Position(0, 9), Position(0, 14)), "Z.typ")),
+                    )
+                ),
+                Either.forRight(
+                    RenameFile(target.toUri().toString(), dir.resolve("Z.typ").toUri().toString())
+                ),
+            )
+
+            handler.applyWorkspaceEdit(project, workspaceEdit)
+
+            val dependentDoc = FileDocumentManager.getInstance().getDocument(dependentVf as VirtualFile)!!
+            assertEquals("#import \"Z.typ\": *", dependentDoc.text)
+            assertEquals(
+                "the file itself must be renamed, not just the imports", "Z.typ", (targetVf as VirtualFile).name
+            )
+            assertTrue("Z.typ should exist on disk", Files.exists(dir.resolve("Z.typ")))
+            assertFalse("A.typ should no longer exist", Files.exists(target))
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    /** Renaming to a path with directories moves the file as well as renaming it. */
+    fun testApplyResourceOperation_targetInAnotherDirectory_movesFile() {
+        val dir = Files.createTempDirectory("typst-rename-move")
+        val subDir = Files.createDirectory(dir.resolve("sub"))
+        val source = dir.resolve("A.typ")
+        try {
+            Files.writeString(source, "#let greeting = 1")
+            val sourceVf = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source)
+            } ?: fail("Could not resolve A.typ in VFS")
+            ApplicationManager.getApplication().runWriteAction {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(subDir)
+            }
+
+            WriteCommandAction.runWriteCommandAction(project) {
+                handler.applyResourceOperation(
+                    RenameFile(source.toUri().toString(), subDir.resolve("Z.typ").toUri().toString())
+                )
+            }
+
+            assertEquals("Z.typ", (sourceVf as VirtualFile).name)
+            assertTrue("file should have moved into sub/", Files.exists(subDir.resolve("Z.typ")))
+            assertFalse("original path should be gone", Files.exists(source))
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    /** A target directory that does not exist must abort the rename, not invent directories. */
+    fun testApplyResourceOperation_missingTargetDirectory_isSkipped() {
+        val dir = Files.createTempDirectory("typst-rename-nodir")
+        val source = dir.resolve("A.typ")
+        try {
+            Files.writeString(source, "#let greeting = 1")
+            val sourceVf = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source)
+            } ?: fail("Could not resolve A.typ in VFS")
+
+            WriteCommandAction.runWriteCommandAction(project) {
+                handler.applyResourceOperation(
+                    RenameFile(
+                        source.toUri().toString(),
+                        dir.resolve("absent").resolve("Z.typ").toUri().toString(),
+                    )
+                )
+            }
+
+            assertEquals("A.typ", (sourceVf as VirtualFile).name)
+            assertTrue("the original file must be left alone", Files.exists(source))
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    // ---- (a) Rename driven from inside an #import statement ----
+
+    /**
+     * The import-path rename, driven through the real entry point with tinymist's response shape.
+     *
+     * What this can and cannot cover: deciding that the caret sits on an import path is tinymist's
+     * job, so the fake server returns exactly what tinymist returns for that case — a placeholder
+     * of the path string, then text edits plus a RenameFile operation (verified against
+     * `crates/tinymist-query/src/prepare_rename.rs` and `rename.rs:48`). What is under test is the
+     * plugin's half: seeding the dialog with the path, and applying *both* halves of the answer.
+     */
+    fun testRename_fromImportStatement_updatesImportAndRenamesFile() {
+        val dir = Files.createTempDirectory("typst-rename-from-import")
+        val target = dir.resolve("A.typ")
+        val dependent = dir.resolve("B.typ")
+        try {
+            Files.writeString(target, "#let greeting = 1")
+            Files.writeString(dependent, "#import \"A.typ\": *")
+            val targetVf = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(target)
+            } ?: fail("Could not resolve A.typ in VFS")
+            val dependentVf = ApplicationManager.getApplication().runWriteAction<VirtualFile?> {
+                LocalFileSystem.getInstance().refreshAndFindFileByNioFile(dependent)
+            } ?: fail("Could not resolve B.typ in VFS")
+
+            // The caret sits on the path inside the import — the scenario under test.
+            myFixture.configureByText("B.typ", "#import \"A<caret>.typ\": *")
+
+            val workspaceEdit = WorkspaceEdit()
+            workspaceEdit.documentChanges = listOf(
+                Either.forLeft(
+                    TextDocumentEdit(
+                        VersionedTextDocumentIdentifier(dependent.toUri().toString(), 0),
+                        listOf(TextEdit(Range(Position(0, 9), Position(0, 14)), "Z.typ")),
+                    )
+                ),
+                Either.forRight(
+                    RenameFile(target.toUri().toString(), dir.resolve("Z.typ").toUri().toString())
+                ),
+            )
+            val fakeClient =
+                FakeLspClient(
+                    // tinymist hands back the whole path string as the placeholder, not a bare stem.
+                    Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
+                        PrepareRenameResult(Range(Position(0, 9), Position(0, 14)), "A.typ")
+                    ),
+                    workspaceEdit,
+                )
+
+            var prompt: String? = null
+            TestDialogManager.setTestInputDialog { message ->
+                prompt = message
+                "Z.typ"
+            }
+
+            handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
+
+            assertTrue(
+                "the dialog must be seeded with the import path, got: $prompt",
+                prompt?.contains("A.typ") == true,
+            )
+            val dependentDoc = FileDocumentManager.getInstance().getDocument(dependentVf as VirtualFile)!!
+            assertEquals("#import \"Z.typ\": *", dependentDoc.text)
+            assertEquals("the imported file must be renamed too", "Z.typ", (targetVf as VirtualFile).name)
+            assertFalse("A.typ should no longer exist", Files.exists(target))
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    // ---- (b) Rename initiated by clicking the file in the Project view ----
+
+    /**
+     * The original regression, checked where it actually bit: the platform's handler *selection*.
+     *
+     * Asserting on `isAvailableOnDataContext` alone would not have caught it — the bug was that
+     * saying "yes" there stops `RenameHandlerRegistry` from ever reaching its default file-rename
+     * handler. This drives the registry itself with a Project-view-shaped context (a file and a
+     * PSI element, deliberately no editor) and checks who wins.
+     */
+    fun testProjectViewContext_platformFileHandlerWinsNotOurs() {
+        if (!pluginRegisteredInTestPlatform()) return
+        val psiFile = myFixture.configureByText("A.typ", "#let greeting = 1")
+        val ctx =
+            SimpleDataContext.builder()
+                .add(CommonDataKeys.PROJECT, project)
+                .add(CommonDataKeys.VIRTUAL_FILE, psiFile.virtualFile)
+                .add(CommonDataKeys.PSI_ELEMENT, psiFile)
+                .build()
+
+        val selected = RenameHandlerRegistry.getInstance().getRenameHandler(ctx)
+
+        assertNotNull("a file rename must find a handler", selected)
+        assertFalse(
+            "the LSP symbol-rename handler must not claim a file rename",
+            selected is TypstLspRenameHandler,
+        )
+        assertInstanceOf(selected, PsiElementRenameHandler::class.java)
+    }
+
+    /** End to end: the handler the platform picks for that context really does rename the file. */
+    fun testProjectViewRename_renamesTheFileOnDisk() {
+        if (!pluginRegisteredInTestPlatform()) return
+        val psiFile = myFixture.configureByText("A.typ", "#let greeting = 1")
+        val ctx =
+            SimpleDataContext.builder()
+                .add(CommonDataKeys.PROJECT, project)
+                .add(CommonDataKeys.VIRTUAL_FILE, psiFile.virtualFile)
+                .add(
+                    CommonDataKeys.PSI_ELEMENT, psiFile
+                ) // Unit-test hook on PsiElementRenameHandler: supplies the new name instead of a dialog.
+                .add(PsiElementRenameHandler.DEFAULT_NAME, "Z.typ")
+                .build()
+        val selected =
+            RenameHandlerRegistry.getInstance().getRenameHandler(ctx)
+            ?: fail("no rename handler for a Project view context")
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            (selected as com.intellij.refactoring.rename.RenameHandler).invoke(project, arrayOf(psiFile), ctx)
+        }
+
+        assertEquals("Z.typ", psiFile.virtualFile.name)
     }
 
     fun testRename_sameNameEntered_treatedAsCancel() {
         myFixture.configureByText("test.typ", "#let foo<caret> = 1")
-        val fakeServer = FakeLspClient(
+        val fakeClient = FakeLspClient(
             Either3.forSecond<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>(
                 PrepareRenameResult(Range(Position(0, 5), Position(0, 8)), "foo")
             ),
-        )
-        // currentName will fall back to getWordAtCaret → "foo" (the word at caret)
+        ) // currentName comes from the server's placeholder → "foo"
         TestDialogManager.setTestInputDialog { "foo" }  // same as current
 
-        handler.performRenameWithServer(project, myFixture.editor, myFixture.file.virtualFile, fakeServer)
+        handler.performRenameWithClient(project, myFixture.editor, myFixture.file.virtualFile, fakeClient)
 
-        assertEquals(1, fakeServer.callCount)  // only prepareRename called
+        assertEquals(1, fakeClient.callCount)  // only prepareRename called
     }
 }
 

@@ -4,6 +4,48 @@
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-14
+
+### Added
+
+- **Renaming a `.typ` file now updates the files that import it.** Renaming `chapter.typ` used to leave every
+  `#import "chapter.typ"` elsewhere in the project pointing at a file that no longer existed, so the document stopped
+  compiling until each one was corrected by hand. The rename now asks tinymist which paths the change invalidates and
+  rewrites them in the same step, so a single undo takes the whole thing back (issue #114).
+
+- **A file can be renamed from its own import statement.** Put the cursor on the path in `#import "chapter.typ": *`,
+  press <kbd>Shift+F6</kbd>, and the file on disk is renamed along with every path that refers to it — useful when the
+  file you want to rename is one you are reading about rather than one you have in front of you (issue #114).
+
+### Fixed
+
+- **Renaming a `.typ` file is no longer silently ignored.** Choosing **Rename** on a `.typ` file in the Project view —
+  or pressing <kbd>Shift+F6</kbd> on it — did nothing at all: no dialog, no error, no change. The plugin's symbol-rename
+  support was claiming the file-rename action as well and then had nothing to do with it, which left the IDE's own file
+  rename with no chance to run. Symbol rename inside the editor was unaffected and continues to work as before (issue
+  #114).
+
+- **The rename dialog is pre-filled with the right name.** It offered a name worked out by scanning the text around the
+  cursor rather than the one the language server reported, so anything that was not a plain identifier came through
+  truncated — renaming an import path called `chapter.typ` was offered as `chapter`. The server's name is now used for
+  every rename (issue #114).
+
+- **Rename is no longer sent to the wrong language server.** With a `.typ` file open from outside the project, a rename
+  could be handed to the server responsible for that outside folder, which knows nothing about the project's files and
+  answers nothing — so the rename appeared to refuse for no reason, reporting that the symbol could not be renamed. The
+  request now goes to the server that owns the file, and waits for one that has finished starting up (issue #114).
+
+### Infrastructure
+
+- Gradle upgraded to 9.7.0
+
+### Known issues
+
+- **Renaming a `.typ` file straight after starting the IDE does not update the files that import it.** The import paths
+  are worked out by the tinymist language server, which does not start until the first `.typ` file is opened — so a
+  rename done before that renames the file and leaves every `#import "old.typ"` untouched, without saying so. Opening
+  any `.typ` file first is enough to avoid it. Being fixed for 0.5.2 (issue #117).
+
 ## [0.5.0] - 2026-08-14
 
 ### Added
@@ -398,7 +440,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.5.1...HEAD
+[0.5.1]: https://github.com/pndv/typst-renderer/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/pndv/typst-renderer/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/pndv/typst-renderer/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/pndv/typst-renderer/compare/0.4.1...0.4.2
