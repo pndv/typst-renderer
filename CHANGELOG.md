@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-14
+
 ### Added
 
 - **Live preview that updates as you type.** The preview pane can now render through tinymist's own preview engine
@@ -14,23 +16,19 @@
   tinymist, a refused port — the pane falls back to the PDF renderer on its own and says so in the Typst Output console.
   **Compile** and **Export** write a PDF and report to the console whichever renderer the pane is using, and never
   switch it: a pane in PDF mode reloads, a pane in Live mode carries on rendering live (issue #109).
-
 - **Editors showing the same document share one live preview.** With a main entry pinned, every open chapter compiles
   through that main, so they all display the same document — one render serves them all, started when the first such tab
   opens and stopped when the last one closes. With no main entry pinned, every file gets its own live preview, as do
   `.typ` files outside the project (issue #109).
-
 - **The live preview follows the cursor.** It scrolls to the part of the document you are editing, keeps up as you move
   around, and re-syncs when you switch back to a tab — so the preview shows the passage you are working on rather than
   wherever you last left it. Turn it off with *Scroll the live preview to follow the cursor* in Settings > Tools >
   Typst. Two things to know: editors sharing one live preview scroll together, because the scroll belongs to the shared
   render rather than to a pane; and a file opened for the very first time has its cursor at the start, so the preview
   begins at the top of the document until you move it (issue #109).
-
 - **Click the preview to jump to the source.** Clicking a spot in the live preview takes the editor to the matching
   place in the `.typ` file that produced it, opening the file if it is not already open — useful in a multi-file
   project, where the passage you are looking at often lives in a chapter you do not have in front of you (issue #109).
-
 - **Pin a main entry file for multi-file projects.** In a project where `main.typ` `#include`s a tree of chapter files,
   opening a chapter on its own used to compile it in isolation, so every cross-file reference (`@ch:cases` pointing at a
   label declared elsewhere) reported "label does not exist" — errors that vanished only when `main.typ` was reopened.
@@ -400,7 +398,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.4.3...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/pndv/typst-renderer/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/pndv/typst-renderer/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/pndv/typst-renderer/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/pndv/typst-renderer/compare/0.4.0...0.4.1
