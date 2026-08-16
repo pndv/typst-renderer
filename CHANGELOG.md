@@ -12,7 +12,6 @@
   `#import "chapter.typ"` elsewhere in the project pointing at a file that no longer existed, so the document stopped
   compiling until each one was corrected by hand. The rename now asks tinymist which paths the change invalidates and
   rewrites them in the same step, so a single undo takes the whole thing back (issue #114).
-
 - **A file can be renamed from its own import statement.** Put the cursor on the path in `#import "chapter.typ": *`,
   press <kbd>Shift+F6</kbd>, and the file on disk is renamed along with every path that refers to it — useful when the
   file you want to rename is one you are reading about rather than one you have in front of you (issue #114).
@@ -24,12 +23,10 @@
   support was claiming the file-rename action as well and then had nothing to do with it, which left the IDE's own file
   rename with no chance to run. Symbol rename inside the editor was unaffected and continues to work as before (issue
   #114).
-
 - **The rename dialog is pre-filled with the right name.** It offered a name worked out by scanning the text around the
   cursor rather than the one the language server reported, so anything that was not a plain identifier came through
   truncated — renaming an import path called `chapter.typ` was offered as `chapter`. The server's name is now used for
   every rename (issue #114).
-
 - **Rename is no longer sent to the wrong language server.** With a `.typ` file open from outside the project, a rename
   could be handed to the server responsible for that outside folder, which knows nothing about the project's files and
   answers nothing — so the rename appeared to refuse for no reason, reporting that the symbol could not be renamed. The
