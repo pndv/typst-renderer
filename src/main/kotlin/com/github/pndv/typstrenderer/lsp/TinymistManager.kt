@@ -4,7 +4,9 @@ import com.github.pndv.typstrenderer.settings.TypstSettingsState
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.diagnostic.logger
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Resolves the tinymist binary path using the following priority:
@@ -18,6 +20,9 @@ import java.io.File
  */
 @Service(Service.Level.APP)
 class TinymistManager {
+
+    private val log = logger<TinymistManager>()
+    private lateinit var downloadDir: File
 
     /**
      * Resolves the tinymist binary path, or null if not available anywhere.
@@ -42,9 +47,12 @@ class TinymistManager {
      * is nothing left to move by the time this version runs.
      */
     fun getDownloadDir(): File {
-        val dir = File(PathManager.getSystemPath(), "typst-renderer${File.separator}bin")
-        dir.mkdirs()
-        return dir
+        if (::downloadDir.isInitialized) {
+            return downloadDir
+        }
+
+        downloadDir = File(PathManager.getSystemPath(), "typst-renderer${File.separator}bin")
+        return downloadDir
     }
 
     /**
@@ -56,11 +64,14 @@ class TinymistManager {
     }
 
     companion object {
-        fun getInstance(): TinymistManager =
-            ApplicationManager.getApplication().getService(TinymistManager::class.java)
+        private val log = logger<TinymistManager>()
+        private val binaryCache: MutableMap<String, String> = ConcurrentHashMap<String, String>()
+
+        fun getInstance(): TinymistManager = ApplicationManager.getApplication().getService(TinymistManager::class.java)
 
         val osName: String? = System.getProperty("os.name")
         val osArch: String? = System.getProperty("os.arch")
+
         fun isWindows(): Boolean = osName?.lowercase()?.contains("win") ?: false
         fun isMacOS(): Boolean = osName?.lowercase()?.contains("mac") ?: false
         fun isLinux(): Boolean = osName?.lowercase()?.contains("linux") ?: false
@@ -129,8 +140,7 @@ class TinymistManager {
         /**
          * Windows-specific well-known install directories.
          */
-        internal fun MutableList<String>.addWindowsDirs(home: File) {
-            // Cargo (Rust) — most common install method for both tinymist and typst
+        internal fun MutableList<String>.addWindowsDirs(home: File) { // Cargo (Rust) — most common install method for both tinymist and typst
             add(File(home, ".cargo${File.separator}bin").absolutePath)
 
             // Scoop
@@ -166,8 +176,7 @@ class TinymistManager {
         /**
          * macOS and Linux well-known install directories.
          */
-        internal fun MutableList<String>.addUnixDirs(home: File) {
-            // Cargo (Rust) — most common install method for both tinymist and typst
+        internal fun MutableList<String>.addUnixDirs(home: File) { // Cargo (Rust) — most common install method for both tinymist and typst
             add(File(home, ".cargo/bin").absolutePath)
 
             // Homebrew
@@ -196,7 +205,15 @@ class TinymistManager {
         /**
          * Searches for a binary by name on the system PATH and well-known install directories.
          */
-        fun findBinary(binaryName: String): String? {
+        fun findBinary(binaryName: String): String? { // Return cached binary if it exists and is executable, else invalidate cache entry
+            binaryCache[binaryName]?.let {
+                if (isBinaryExecutable(File(it))) {
+                    return it
+                } else {
+                    binaryCache.remove(binaryName)
+                }
+            }
+
             val extensions = if (isWindows()) listOf(".exe", ".cmd", ".bat", "") else listOf("")
 
             // Combine system PATH dirs with well-known dirs
@@ -207,10 +224,14 @@ class TinymistManager {
                 for (ext in extensions) {
                     val candidate = File(dir, binaryName + ext)
                     if (isBinaryExecutable(candidate)) {
-                        return candidate.absolutePath
+                        val binaryPath = candidate.absolutePath
+                        binaryCache[binaryName] = binaryPath
+                        return binaryPath
                     }
                 }
             }
+
+            log.debug("Binary $binaryName not found on system PATH or well-known install directories")
             return null
         }
     }
