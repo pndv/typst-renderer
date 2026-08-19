@@ -1,7 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <rect width="16" height="16" rx="3" fill="#239DAD"/>
-  <text x="8" y="12.5" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white" text-anchor="middle">
-    t
-    <tspan dy="-7" dx = "-4" font-size="4">render</tspan>
-  </text>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="16" height="16"
+     viewBox="0 0 40 40">
+  <rect width="40" height="40" rx="7.5"
+        fill="#239DAD"/>
+  <g style="fill:#fff">
+    <path fill="white"
+          d="M8.343 11.167q0 .904.252 1.214t.915.31q.687 0 1.763-.715l.457.786Q9.716 14.5 8.412 14.5t-2.06-.643q-.754-.666-.754-2.333V5.286H4.453l-.183-.881l1.328-.429V2.81L8.343 1.5v2.619l2.7-.214l-.251 1.548l-2.449-.096z"
+          transform="scale(2.5)"/>
+  </g>
 </svg>
