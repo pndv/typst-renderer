@@ -65,6 +65,13 @@ class TypstLexer : LexerBase() {
             return i
         }
 
+        // coalesce whitespace
+        if (ch.isWhitespace()) {
+            var i = from + 1
+            while (i < endOffset && buffer[i].isWhitespace()) i++
+            return i
+        }
+
         // Non-word: single character token
         return from + 1
     }
