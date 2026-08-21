@@ -32,11 +32,31 @@ class TypstOutputToolWindowFactory : ToolWindowFactory {
         // Drain any output that was produced before the tool window existed (e.g. a compile
         // that finished while the console was still null). printToConsole buffers those
         // messages in the holder; now that the console is live, flush them in order so the
-        // first compile's diagnostics aren't lost on a freshly-opened project.
+        // first compile's diagnostics aren't lost on a newly opened project.
         consoleHolder.printBufferToConsole()
 
-        // Clear the consoleHolder's console reference when the console is disposed
-        val disposableConsole = Disposable { consoleHolder.console = null }
+        // Disposal wiring, half 1 of 2 — the other half is the
+        // Disposer.register(content, console) call after the content is added below.
+        // Read together: the content owns the console, and the console owns the holder
+        // slot that points back at it.
+        //
+        // Clearing the slot on disposal means later reads see null instead of a stale
+        // pointer into a disposed ConsoleViewImpl. Disposer runs children before the
+        // parent's own dispose(), so the slot is cleared before the console starts
+        // releasing its editor.
+        //
+        // The identity check matters only if the console is ever rebuilt without an IDE
+        // restart (a "reset console" action, a content swap). If the replacement claims
+        // the slot before this disposable runs, an unconditional null would wipe the
+        // live console's reference — the tool window would keep rendering but never
+        // receive a line, with every message falling through to the pre-open buffer
+        // instead. `console` is captured, so each disposable only ever retracts its own
+        // registration, never a successor's.
+        val disposableConsole = Disposable {
+            if (consoleHolder.console === console) {
+                consoleHolder.console = null
+            }
+        }
         Disposer.register(console, disposableConsole)
 
         // Toolbar Actions Layout: vertical strip down the left edge of the
@@ -81,7 +101,10 @@ class TypstOutputToolWindowFactory : ToolWindowFactory {
         val content = toolWindow.contentManager.factory.createContent(panel, null, false)
         toolWindow.contentManager.addContent(content)
 
-        // Tie the console's reference to the content's lifecycle
+        // Disposal wiring, half 2 of 2 — see disposableConsole above. The content owns
+        // the console: removing the content disposes the console, which releases the
+        // underlying EditorImpl and the message filter registered on it, and that in
+        // turn fires the disposable above to clear the holder slot.
         Disposer.register(content, console)
     }
 
