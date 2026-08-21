@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templateSet group="Typst">
+    <template name="heading" value="= $TEXT$$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.heading.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="TEXT" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="figure" value="#figure(&#10;  image(&quot;$PATH$&quot;),&#10;  caption: [$CAPTION$],&#10;)$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.figure.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="PATH" expression="" defaultValue="&quot;image.png&quot;" alwaysStopAt="true"/>
+        <variable name="CAPTION" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="table"
+              value="#table(&#10;  columns: $COLUMNS$,&#10;  [$HEADER1$], [$HEADER2$],&#10;  [$CELL1$], [$CELL2$],&#10;)$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.table.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="COLUMNS" expression="" defaultValue="&quot;2&quot;" alwaysStopAt="true"/>
+        <variable name="HEADER1" expression="" defaultValue="" alwaysStopAt="true"/>
+        <variable name="HEADER2" expression="" defaultValue="" alwaysStopAt="true"/>
+        <variable name="CELL1" expression="" defaultValue="" alwaysStopAt="true"/>
+        <variable name="CELL2" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <!-- Literal $ characters are escaped as $$ — Typst's own math delimiter collides with the
+         live-template variable delimiter, so this is the one template in the set where that
+         matters. Expands to "$ <EXPR> $" (a display equation) with the cursor inside. -->
+    <template name="math" value="$$ $EXPR$ $$$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.math.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="EXPR" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="list" value="- $ITEM1$&#10;- $ITEM2$$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.list.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="ITEM1" expression="" defaultValue="" alwaysStopAt="true"/>
+        <variable name="ITEM2" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="footnote" value="#footnote[$TEXT$]$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.footnote.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="TEXT" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="set" value="#set $ELEMENT$($PROPERTY$: $VALUE$)$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.set.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="ELEMENT" expression="" defaultValue="&quot;heading&quot;" alwaysStopAt="true"/>
+        <variable name="PROPERTY" expression="" defaultValue="&quot;numbering&quot;" alwaysStopAt="true"/>
+        <variable name="VALUE" expression="" defaultValue="&quot;1.&quot;" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="show" value="#show $SELECTOR$: $REPLACEMENT$$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.show.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="SELECTOR" expression="" defaultValue="&quot;heading&quot;" alwaysStopAt="true"/>
+        <variable name="REPLACEMENT" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="import" value="#import &quot;$PATH$&quot;: $ITEMS$$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.import.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="PATH" expression="" defaultValue="&quot;lib.typ&quot;" alwaysStopAt="true"/>
+        <variable name="ITEMS" expression="" defaultValue="&quot;*&quot;" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+
+    <template name="page" value="#set page(&#10;  paper: &quot;$PAPER$&quot;,&#10;  margin: $MARGIN$,&#10;)$END$"
+              resource-bundle="messages.TypstBundle" key="liveTemplate.page.description"
+              toReformat="false" toShortenFQNames="false">
+        <variable name="PAPER" expression="" defaultValue="&quot;a4&quot;" alwaysStopAt="true"/>
+        <variable name="MARGIN" expression="" defaultValue="&quot;1in&quot;" alwaysStopAt="true"/>
+        <context>
+            <option name="Typst" value="true"/>
+            <option name="OTHER" value="false"/>
+        </context>
+    </template>
+</templateSet>

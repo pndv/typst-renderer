@@ -35,6 +35,11 @@
         <lang.commenter language="Typst"
                         implementationClass="com.github.pndv.typstrenderer.language.TypstCommenter"/>
 
+        <!-- Live templates (Settings > Editor > Live Templates > Typst) -->
+        <liveTemplateContext contextId="Typst"
+                             implementation="com.github.pndv.typstrenderer.language.TypstLiveTemplateContextType"/>
+        <defaultLiveTemplates file="liveTemplates/Typst.xml"/>
+
         <!-- LSP support via tinymist -->
         <platform.lsp.integrationProvider
                 implementation="com.github.pndv.typstrenderer.lsp.TinymistLspServerSupportProvider"/>
