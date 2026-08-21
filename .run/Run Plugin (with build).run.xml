@@ -15,7 +15,7 @@
           <option value="runIde" />
         </list>
       </option>
-      <option name="vmOptions" value="-Dide.browser.jcef.debug.port=9222" />
+      <option name="vmOptions" value="-Dide.browser.jcef.debug.port=9222 -Didea.disposer.debug=on"/>
     </ExternalSystemSettings>
     <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
     <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
