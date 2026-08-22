@@ -23,6 +23,9 @@
                 language="Typst"
                 extensions="typ"/>
 
+        <!-- Backs the "New > Typst File" action (Typst.NewFile) -->
+        <internalFileTemplate name="TypstFile"/>
+
         <!-- Minimal parser definition (binds .typ files to TypstLanguage at the PSI level) -->
         <lang.parserDefinition language="Typst"
                                implementationClass="com.github.pndv.typstrenderer.language.TypstParserDefinition"/>
@@ -109,6 +112,11 @@
     </projectListeners>
 
     <actions>
+        <action id="Typst.NewFile"
+                class="com.github.pndv.typstrenderer.actions.TypstCreateFileAction">
+            <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFile"/>
+        </action>
+
         <action id="Typst.Compile"
                 class="com.github.pndv.typstrenderer.actions.TypstCompileAction"
                 icon="AllIcons.Actions.Execute">

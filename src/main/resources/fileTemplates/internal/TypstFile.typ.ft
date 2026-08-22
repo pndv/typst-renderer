@@ -1,0 +1,5 @@
+#* IntelliJ's internal file-template resource format (FileTemplateManager); it can contain
+   Velocity macros such as ${NAME}, ${USER} or ${DATE}. This one is deliberately left without
+   any — new Typst files are created blank by design, with starter content left to live
+   templates instead. Velocity comment blocks like this one are stripped from the rendered
+   output, so the created .typ file still ends up empty. *#
