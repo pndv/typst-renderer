@@ -4,6 +4,35 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-22
+
+### Added
+
+- **A "New → Typst File" action is now available.** Right-click a directory in the Project view — or use *File → New* —
+  and choose **Typst File** to create a `.typ` file with the right extension and icon already applied, instead of using
+  *New → File* and typing the extension by hand (issue #126).
+- **Ten live templates for common Typst patterns.** Type an abbreviation and press <kbd>Tab</kbd> to expand boilerplate
+  for a heading, figure, table, math block, list, footnote, `set` rule, `show` rule, import, or page-setup rule, with
+  tab-stop navigation between the placeholders. Available under **Settings > Editor > Live Templates > Typst**, and
+  scoped to `.typ` files only (issue #123).
+
+### Changed
+
+- **The Typst file icon has been redesigned.** The previous icon reused the plugin's own "renderer" branding, which
+  looked out of place as a file icon; the new one follows the JetBrains file-icon style used by languages like JS and TS
+  (issue #116).
+- Opening `.typ` files no longer repeatedly re-scans the filesystem for the tinymist binary — the resolved path is now
+  cached. The plugin's `bin/` download directory is no longer created as a side effect of every lookup, only when a
+  binary is actually downloaded there (issue #54).
+- Reduced token and PSI overhead on documents with large blocks of indentation or blank lines: the lexer now groups a
+  run of whitespace into a single token instead of creating one token per character (issue #55).
+
+### Fixed
+
+- Closed a latent gap in the Typst Output console's disposal wiring where a console rebuilt mid-session (not currently
+  reachable through any existing action) could be left live but silently unreferenced, permanently dropping further
+  output. Defensive fix; no known way to trigger it today (issue #125).
+
 ## [0.5.1] - 2026-08-14
 
 ### Added
@@ -437,7 +466,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.5.1...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/pndv/typst-renderer/compare/0.5.1...0.6.0
 [0.5.1]: https://github.com/pndv/typst-renderer/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/pndv/typst-renderer/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/pndv/typst-renderer/compare/0.4.2...0.4.3
