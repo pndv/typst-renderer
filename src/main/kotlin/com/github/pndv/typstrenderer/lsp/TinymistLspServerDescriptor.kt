@@ -7,6 +7,8 @@ import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
+import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VfsUtilCore
@@ -36,7 +38,7 @@ class TinymistLspServerDescriptor(
 ) : ProjectWideLspClientDescriptor(project, "Tinymist") {
     private val log = logger<TinymistLspServerDescriptor>()
 
-    override val lspCustomization = tinymistLspCustomization()
+    override val lspCustomization = tinymistLspCustomization(log)
 
     override fun isSupportedFile(file: VirtualFile): Boolean = projectClientClaims(
         isTypstFile = file.fileType == TypstFileType,
@@ -84,7 +86,7 @@ class TinymistExternalFileLspServerDescriptor(
 ) : LspClientDescriptor(project, "Tinymist (${rootDir.name})", rootDir) {
     private val log = logger<TinymistExternalFileLspServerDescriptor>()
 
-    override val lspCustomization = tinymistLspCustomization()
+    override val lspCustomization = tinymistLspCustomization(log)
 
     override fun isSupportedFile(file: VirtualFile): Boolean = externalClientClaims(
         isTypstFile = file.fileType == TypstFileType,
@@ -141,7 +143,7 @@ internal fun isInProjectContent(project: Project, file: VirtualFile): Boolean =
  * semantic tokens are force-enabled to bypass the platform's TEXT/textmate language-id
  * restriction.
  */
-internal fun tinymistLspCustomization(): LspCustomization = object : LspCustomization() {
+internal fun tinymistLspCustomization(log: Logger): LspCustomization = object : LspCustomization() {
 
     override val formattingCustomizer = object : LspFormattingSupport() {
         override fun shouldFormatThisFileExclusivelyByServer(
@@ -154,6 +156,25 @@ internal fun tinymistLspCustomization(): LspCustomization = object : LspCustomiz
     }
 
     override val semanticTokensCustomizer = object : LspSemanticTokensSupport() {
+        // Tinymist identifies the correct token types for Typst syntax highlighting, but IntelliJ does not recognise
+        // it yet. So we have to override the colours for parts which are unidentified.
+        override fun getTextAttributesKey(tokenType: String, modifiers: List<String>): TextAttributesKey? {
+            val textAttributesKey: TextAttributesKey? = when (tokenType) {
+                "bool" -> DefaultLanguageHighlighterColors.KEYWORD
+                "escape" -> DefaultLanguageHighlighterColors.VALID_STRING_ESCAPE
+                "raw" -> DefaultLanguageHighlighterColors.STRING
+                "link" -> DefaultLanguageHighlighterColors.HIGHLIGHTED_REFERENCE
+                "label", "ref" -> DefaultLanguageHighlighterColors.METADATA
+                "heading" -> DefaultLanguageHighlighterColors.CONSTANT
+                "marker", "term" -> DefaultLanguageHighlighterColors.DOC_COMMENT_MARKUP
+                "delim", "punct" -> DefaultLanguageHighlighterColors.BRACES
+                else -> super.getTextAttributesKey(tokenType, modifiers)
+            }
+            log.trace("getTextAttributesKey($tokenType, $modifiers) -> $textAttributesKey")
+
+            return textAttributesKey
+        }
+
         override fun shouldAskServerForSemanticTokens(psiFile: PsiFile): Boolean = true
     }
 }
