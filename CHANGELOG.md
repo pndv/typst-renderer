@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-27
+
+### Fixed
+
+- **Syntax colouring now covers the Typst-specific semantic tokens.** Constructs such as booleans, headings, raw blocks,
+  references, labels and markup emphasis were reported by tinymist under token type names the platform does not
+  recognise, so they were left uncoloured. These are now mapped to matching IntelliJ text attributes, and semantic
+  tokens are requested for the Typst language regardless of the platform's built-in language restriction (issue #115).
+
+### Changed
+
+- Build tooling updated to Gradle 9.7.1.
+
 ## [0.6.0] - 2026-08-22
 
 ### Added
@@ -466,7 +479,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.6.0...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.6.1...HEAD
+[0.6.1]: https://github.com/pndv/typst-renderer/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/pndv/typst-renderer/compare/0.5.1...0.6.0
 [0.5.1]: https://github.com/pndv/typst-renderer/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/pndv/typst-renderer/compare/0.4.3...0.5.0
