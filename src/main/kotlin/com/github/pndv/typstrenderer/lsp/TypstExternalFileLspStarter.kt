@@ -111,7 +111,17 @@ internal fun recoverTypstLspForFile(project: Project, file: VirtualFile) {
     // a bounded, event-driven download trigger into 836 attempts and 830 failure balloons inside
     // seven seconds (issue #105). Downloading stays the editor-open path's job, where it fires once
     // per file opened.
-    if (TinymistManager.getInstance().resolveTinymistPath() == null) {
+    //
+    // Resolved the same way the project would actually be launched (WSL or native) — a
+    // WSL-hosted project commonly has no native Windows tinymist at all, so checking only
+    // resolveTinymistPath() here would skip recovery for it forever.
+    val wslTarget = resolveWslTargetForProject(project)
+    val resolved = if (wslTarget != null) {
+        TinymistManager.getInstance().resolveTinymistPathForWsl(wslTarget.distroId)
+    } else {
+        TinymistManager.getInstance().resolveTinymistPath()
+    }
+    if (resolved == null) {
         log.debug { "Skipping LSP recovery for ${file.path}: tinymist is not installed" }
         return
     }
@@ -136,12 +146,14 @@ internal fun decideExternalLspAction(
     isInContent: Boolean,
     hasParentDir: Boolean,
     tinymistPath: String?,
+    wslTarget: WslTarget? = null,
 ): LspStartAction = when {
     isUnitTestMode -> LspStartAction.Skip
     !isTypstFile -> LspStartAction.Skip
     isInContent -> LspStartAction.Skip
     !hasParentDir -> LspStartAction.Skip
-    tinymistPath != null -> LspStartAction.StartServer(tinymistPath)
+    tinymistPath != null -> LspStartAction.StartServer(tinymistPath, wslTarget)
+    wslTarget != null -> LspStartAction.TriggerWslNotFound(wslTarget)
     else -> LspStartAction.TriggerDownload
 }
 
@@ -164,7 +176,12 @@ internal fun handleOpenedFileForExternalLsp(project: Project, file: VirtualFile)
             file.fileType == TypstFileType // Resolve lazily: the content check and binary resolve are pointless for the // overwhelmingly common non-.typ case.
         val isInContent = isTypstFile && isInProjectContent(project, file)
         val needsBinary = isTypstFile && !isInContent && file.parent != null
-        val tinymistPath = if (needsBinary) TinymistManager.getInstance().resolveTinymistPath() else null
+        val wslTarget = if (needsBinary) resolveWslTargetForProject(project) else null
+        val tinymistPath = when {
+            !needsBinary -> null
+            wslTarget != null -> TinymistManager.getInstance().resolveTinymistPathForWsl(wslTarget.distroId)
+            else -> TinymistManager.getInstance().resolveTinymistPath()
+        }
 
         val action = decideExternalLspAction(
             isUnitTestMode = false,
@@ -172,6 +189,7 @@ internal fun handleOpenedFileForExternalLsp(project: Project, file: VirtualFile)
             isInContent = isInContent,
             hasParentDir = file.parent != null,
             tinymistPath = tinymistPath,
+            wslTarget = wslTarget,
         )
         runExternalLspAction(project, file, action)
     }
@@ -198,8 +216,16 @@ private suspend fun resolveExternalLspForOpenFile(
 
     val isInContent = readAction { isFileInProjectContent(project, file) }
     val hasParentDir = file.parent != null
-    val tinymistPath = if (!isInContent && hasParentDir) {
-        withContext(Dispatchers.IO) { TinymistManager.getInstance().resolveTinymistPath() }
+    val needsBinary = !isInContent && hasParentDir
+    val wslTarget = if (needsBinary) resolveWslTargetForProject(project) else null
+    val tinymistPath = if (needsBinary) {
+        withContext(Dispatchers.IO) {
+            if (wslTarget != null) {
+                TinymistManager.getInstance().resolveTinymistPathForWsl(wslTarget.distroId)
+            } else {
+                TinymistManager.getInstance().resolveTinymistPath()
+            }
+        }
     } else {
         null
     }
@@ -210,6 +236,7 @@ private suspend fun resolveExternalLspForOpenFile(
         isInContent = isInContent,
         hasParentDir = hasParentDir,
         tinymistPath = tinymistPath,
+        wslTarget = wslTarget,
     )
     runExternalLspAction(project, file, action)
 }
@@ -225,7 +252,15 @@ private fun runExternalLspAction(project: Project, file: VirtualFile, action: Ls
     when (action) {
         LspStartAction.Skip -> log.debug { "Skipping external LSP start for file ${file.path}" }
 
-        is LspStartAction.StartServer -> startExternalClient(project, action.tinymistPath, file)
+        is LspStartAction.StartServer -> startExternalClient(project, action.tinymistPath, file, action.wslTarget)
+
+        is LspStartAction.TriggerWslNotFound -> {
+            log.warn(
+                "Tinymist not found in WSL distro '${action.wslTarget.distroId}'; " +
+                    "no external LSP for file ${file.path}"
+            )
+            notifyWslTinymistMissing(project, action.wslTarget.distroId)
+        }
 
         LspStartAction.TriggerDownload -> {
             log.info("Tinymist not found, triggering auto-download for external file ${file.path}")
@@ -253,11 +288,13 @@ private fun runExternalLspAction(project: Project, file: VirtualFile, action: Ls
     }
 }
 
-private fun startExternalClient(project: Project, tinymistPath: String, file: VirtualFile) {
+private fun startExternalClient(
+    project: Project, tinymistPath: String, file: VirtualFile, wslTarget: WslTarget? = null
+) {
     val rootDir = file.parent ?: return
     log.info("Starting external-file tinymist LSP from: $tinymistPath rooted at ${rootDir.path} for file ${file.path}")
     LspClientManager.getInstance(project).ensureClientStarted(
         TinymistLspServerSupportProvider::class.java,
-        TinymistExternalFileLspServerDescriptor(project, tinymistPath, rootDir),
+        TinymistExternalFileLspServerDescriptor(project, tinymistPath, rootDir, wslTarget),
     )
 }

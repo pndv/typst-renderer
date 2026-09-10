@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Tinymist can now run inside a WSL distribution.** A project opened from a `\\wsl$\<distro>\...` or
+  `\\wsl.localhost\<distro>\...` path now launches tinymist inside that distribution instead of trying — and failing —
+  to run it as a native Windows process. The tinymist binary already installed in the distro is discovered
+  automatically (`which tinymist`), and the mode can be overridden in **Settings > Tools > Typst** (Auto / Always /
+  Never), along with an explicit distribution and a manual path to the binary inside it.
+
 ## [0.6.1] - 2026-08-27
 
 ### Fixed

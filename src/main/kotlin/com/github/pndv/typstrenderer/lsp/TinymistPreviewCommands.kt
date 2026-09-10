@@ -99,7 +99,7 @@ internal object TinymistPreviewCommands {
      */
     internal fun buildStartPreviewParams(
         taskId: String,
-        entry: Path,
+        entryPath: String,
         invertColours: PreviewInvertColours,
         refreshStyle: PreviewRefreshStyle,
         primary: Boolean,
@@ -115,7 +115,7 @@ internal object TinymistPreviewCommands {
             // the first has to declare itself secondary or the start request is rejected
             // with "cannot register preview to the compiler instance".
             if (!primary) add("--not-primary")
-            add(entry.toAbsolutePath().toString())
+            add(entryPath)
         }
         log.debug { "doStartPreview argv: $argv" }
         return ExecuteCommandParams("tinymist.doStartPreview", listOf(argv))
@@ -134,13 +134,13 @@ internal object TinymistPreviewCommands {
      */
     internal fun buildScrollPreviewParams(
         taskId: String,
-        source: Path,
+        sourcePath: String,
         line: Int,
         character: Int
     ): ExecuteCommandParams {
         val event = mapOf(
             "event" to "panelScrollTo",
-            "filepath" to source.toAbsolutePath().toString(),
+            "filepath" to sourcePath,
             "line" to line,
             "character" to character,
         )
@@ -171,7 +171,7 @@ internal object TinymistPreviewCommands {
         return try {
             val outcome = client.sendRequestSync { server4j ->
                 val params = buildStartPreviewParams(
-                    taskId, entry, invertColours, refreshStyle, primary, partialRendering
+                    taskId, TinymistCommands.resolveWirePath(client, entry), invertColours, refreshStyle, primary, partialRendering
                 )
                 server4j.workspaceService.executeCommand(params).handle { response, error ->
                     log.debug { "doStartPreview($taskId) raw response: $response, error: $error" }
@@ -246,7 +246,7 @@ internal object TinymistPreviewCommands {
         try {
             client.sendRequestSync { server4j ->
                 server4j.workspaceService.executeCommand(
-                    buildScrollPreviewParams(taskId, source, line, character)
+                    buildScrollPreviewParams(taskId, TinymistCommands.resolveWirePath(client, source), line, character)
                 )
             }
             log.debug { "Scrolled preview task $taskId to $source:$line:$character" }

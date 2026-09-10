@@ -3,6 +3,7 @@ package com.github.pndv.typstrenderer.lsp
 import com.github.pndv.typstrenderer.language.TypstFileType
 import com.github.pndv.typstrenderer.settings.TypstProjectSettingsState
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.wsl.WSLDistribution
 import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.debug
@@ -34,9 +35,10 @@ import java.nio.file.Path
  * file actually lives under.
  */
 class TinymistLspServerDescriptor(
-    project: Project, private val tinymistPath: String
+    project: Project, private val tinymistPath: String, private val wslTarget: WslTarget? = null
 ) : ProjectWideLspClientDescriptor(project, "Tinymist") {
     private val log = logger<TinymistLspServerDescriptor>()
+    internal val wslDistribution: WSLDistribution? by lazy { wslTarget?.let { findInstalledWslDistribution(it.distroId) } }
 
     override val lspCustomization = tinymistLspCustomization(log)
 
@@ -44,6 +46,15 @@ class TinymistLspServerDescriptor(
         isTypstFile = file.fileType == TypstFileType,
         isInContent = isInProjectContent(project, file),
     )
+
+    // See wslAwareFilePath's doc for why this matters: without it, every LSP file URI for a
+    // WSL-hosted project is malformed from tinymist's point of view, and compile/export silently
+    // fails to resolve a destination (issue reported after enabling WSL execution).
+    override fun getFilePath(file: VirtualFile): String =
+        wslAwareFilePath(file.path, wslDistribution) ?: super.getFilePath(file)
+
+    override fun findLocalFileByPath(path: String): VirtualFile? =
+        super.findLocalFileByPath(windowsPathFromWsl(path, wslDistribution))
 
     override fun createInitializationOptions(): Any = buildTinymistInitializationOptions(project, log)
 
@@ -60,7 +71,7 @@ class TinymistLspServerDescriptor(
         val typstRoot = resolveTypstRoot(project)
         log.debug { "Typst project root: $typstRoot" }
 
-        return buildTinymistCommandLine(tinymistPath, project, typstRoot?.let { Path.of(it) }, log)
+        return buildTinymistCommandLine(tinymistPath, project, typstRoot?.let { Path.of(it) }, log, wslTarget)
     }
 }
 
@@ -82,9 +93,13 @@ class TinymistLspServerDescriptor(
  * repeated `ensureClientStarted` calls for the same folder reuse the running client.
  */
 class TinymistExternalFileLspServerDescriptor(
-    project: Project, private val tinymistPath: String, private val rootDir: VirtualFile
+    project: Project,
+    private val tinymistPath: String,
+    private val rootDir: VirtualFile,
+    private val wslTarget: WslTarget? = null,
 ) : LspClientDescriptor(project, "Tinymist (${rootDir.name})", rootDir) {
     private val log = logger<TinymistExternalFileLspServerDescriptor>()
+    internal val wslDistribution: WSLDistribution? by lazy { wslTarget?.let { findInstalledWslDistribution(it.distroId) } }
 
     override val lspCustomization = tinymistLspCustomization(log)
 
@@ -94,11 +109,17 @@ class TinymistExternalFileLspServerDescriptor(
         isUnderRoot = VfsUtilCore.isAncestor(rootDir, file, false),
     )
 
+    override fun getFilePath(file: VirtualFile): String =
+        wslAwareFilePath(file.path, wslDistribution) ?: super.getFilePath(file)
+
+    override fun findLocalFileByPath(path: String): VirtualFile? =
+        super.findLocalFileByPath(windowsPathFromWsl(path, wslDistribution))
+
     override fun createInitializationOptions(): Any = buildTinymistInitializationOptions(project, log)
 
     override fun createCommandLine(): GeneralCommandLine {
         log.debug { "Creating Tinymist LSP command line for external root ${rootDir.path}" }
-        return buildTinymistCommandLine(tinymistPath, project, rootDir.toNioPath(), log)
+        return buildTinymistCommandLine(tinymistPath, project, rootDir.toNioPath(), log, wslTarget)
     }
 }
 
@@ -218,23 +239,51 @@ internal fun buildTinymistInitializationOptions(project: Project, log: Logger): 
  * both descriptor flavours; [workingDir] is the workspace root the client is rooted at —
  * the resolved project root for the project-wide client, the file's folder for an
  * external-file client.
+ *
+ * When [wslTarget] is non-null, [tinymistPath] is expected to already be a Linux-native path
+ * (or bare binary name) resolved from *inside* that distro (see
+ * [TinymistManager.resolveTinymistPathForWsl]) — only [workingDir] and [fontPath] need
+ * translating here, since they were resolved on the Windows side (see [TypstParamResolver.kt]).
+ * The command line is then wrapped for `wsl.exe` execution via [patchCommandLineForWsl].
  */
+@Suppress("DEPRECATION") // WSLDistribution.getWslPath(String) is deprecated in favour of the newer
+// Eel-based remote-filesystem APIs (see com.intellij.platform.ide.impl.wsl); migrating this plugin
+// onto Eel is a much larger change than translating a couple of path arguments and not warranted
+// here — the String overload remains functional and is what the rest of this file's
+// java.nio.file.Path/String plumbing already expects.
 internal fun buildTinymistCommandLine(
     tinymistPath: String,
     project: Project,
     workingDir: Path?,
     log: Logger,
+    wslTarget: WslTarget? = null,
 ): GeneralCommandLine {
     val fontPath = resolveTypstFontPath(project)
     log.debug { "Typst project Font path: $fontPath" }
 
-    val commandLine = GeneralCommandLine(buildList {
+    val distribution = wslTarget?.let {
+        findInstalledWslDistribution(it.distroId) ?: run {
+            log.warn("WSL distribution '${it.distroId}' is no longer installed; launching tinymist natively")
+            null
+        }
+    }
+
+    val baseCommandLine = GeneralCommandLine(buildList {
         add(tinymistPath)
         add("lsp")
-        fontPath?.let { add("--font-path"); add(it) }
+        val effectiveFontPath = fontPath?.let { distribution?.getWslPath(it) ?: it }
+        effectiveFontPath?.let { add("--font-path"); add(it) }
     }).apply {
         withCharset(Charsets.UTF_8)
-        workingDir?.let { withWorkingDirectory(it) }
+    }
+
+    val commandLine = if (distribution != null) {
+        val remoteWorkingDir = workingDir?.let { distribution.getWslPath(it.toString()) }
+        runCatching { patchCommandLineForWsl(baseCommandLine, project, distribution, remoteWorkingDir) }
+            .onFailure { log.warn("Failed to patch command line for WSL distro '${wslTarget.distroId}': ${it.message}") }
+            .getOrElse { baseCommandLine.apply { workingDir?.let { withWorkingDirectory(it) } } }
+    } else {
+        baseCommandLine.apply { workingDir?.let { withWorkingDirectory(it) } }
     }
 
     log.debug { "TinyMist LSP Server CommandLine is: $commandLine" }

@@ -113,6 +113,42 @@ class TypstExternalFileLspStarterTest {
         assertSame(LspStartAction.Skip, action)
     }
 
+    @Test
+    fun decideExternalLspAction_wslBinaryResolved_startsServerWithWslTarget() {
+        val path = "/home/user/.cargo/bin/tinymist"
+        val wslTarget = WslTarget("Ubuntu-22.04")
+
+        val action = decideExternalLspAction(
+            isUnitTestMode = false,
+            isTypstFile = true,
+            isInContent = false,
+            hasParentDir = true,
+            tinymistPath = path,
+            wslTarget = wslTarget,
+        )
+
+        assertTrue("Expected StartServer", action is LspStartAction.StartServer)
+        val startServer = action as LspStartAction.StartServer
+        assertEquals(path, startServer.tinymistPath)
+        assertEquals(wslTarget, startServer.wslTarget)
+    }
+
+    @Test
+    fun decideExternalLspAction_wslTargetButBinaryMissing_triggersWslNotFoundNotDownload() {
+        val wslTarget = WslTarget("Ubuntu-22.04")
+
+        val action = decideExternalLspAction(
+            isUnitTestMode = false,
+            isTypstFile = true,
+            isInContent = false,
+            hasParentDir = true,
+            tinymistPath = null,
+            wslTarget = wslTarget,
+        )
+
+        assertEquals(LspStartAction.TriggerWslNotFound(wslTarget), action)
+    }
+
     // ---- file-claim partition between the project-wide and external clients ----
 
     @Test
