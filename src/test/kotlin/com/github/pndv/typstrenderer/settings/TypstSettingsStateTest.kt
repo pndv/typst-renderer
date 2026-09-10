@@ -135,8 +135,10 @@ class TypstSettingsStateTest {
          *
          * `defaultPreviewMode` persists as the enum's id rather than the enum: an id that no
          * longer exists (downgrade, hand-edited XML) then degrades to the default instead of
-         * failing to deserialise the whole settings object.
+         * failing to deserialise the whole settings object. `wslMode` (see
+         * [com.github.pndv.typstrenderer.lsp.WslExecutionMode]) persists the same way, for the
+         * same reason.
          */
-        val TYPE_ADAPTING_ACCESSORS = setOf("defaultPreviewMode")
+        val TYPE_ADAPTING_ACCESSORS = setOf("defaultPreviewMode", "wslMode")
     }
 }

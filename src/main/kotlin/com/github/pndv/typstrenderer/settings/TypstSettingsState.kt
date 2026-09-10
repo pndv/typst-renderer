@@ -1,6 +1,7 @@
 package com.github.pndv.typstrenderer.settings
 
 import com.github.pndv.typstrenderer.editor.TypstPreviewMode
+import com.github.pndv.typstrenderer.lsp.WslExecutionMode
 import com.intellij.openapi.components.*
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 
@@ -15,7 +16,20 @@ class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
         // to deserialise the whole settings object.
         var defaultPreviewMode: String = TypstPreviewMode.LIVE.id,
         var livePreviewOnType: Boolean = true,
-        var livePreviewFollowCursor: Boolean = true
+        var livePreviewFollowCursor: Boolean = true,
+
+        // Whether tinymist runs inside a WSL distribution rather than natively — see
+        // WslExecution.kt. Stored as the enum's name (same unrecognised-value-degrades-to-default
+        // rationale as defaultPreviewMode above).
+        var wslMode: String = WslExecutionMode.AUTO.name,
+
+        // Explicit WSL distribution override. Read by WslExecutionMode.ALWAYS unconditionally, and
+        // by AUTO to pick which distro to use when one was already detected from the project path.
+        var wslDistro: String = "",
+
+        // Manual fallback path to the tinymist binary inside the WSL distribution, used when
+        // `which tinymist` inside the distro does not find it.
+        var tinymistWslPath: String = "",
     )
 
     private var state = State()
@@ -55,6 +69,21 @@ class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
         set(value) {
             state.livePreviewFollowCursor = value
         }
+
+    /** How tinymist decides whether to run inside WSL — see [WslExecutionMode]. */
+    var wslMode: WslExecutionMode
+        get() = WslExecutionMode.fromStoredValue(state.wslMode)
+        set(value) {
+            state.wslMode = value.name
+        }
+
+    var wslDistro: String
+        get() = state.wslDistro
+        set(value) { state.wslDistro = value }
+
+    var tinymistWslPath: String
+        get() = state.tinymistWslPath
+        set(value) { state.tinymistWslPath = value }
 
     override fun getState(): State = state
 

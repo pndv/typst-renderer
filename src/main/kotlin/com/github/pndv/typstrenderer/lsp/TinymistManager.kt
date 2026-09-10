@@ -1,6 +1,8 @@
 package com.github.pndv.typstrenderer.lsp
 
 import com.github.pndv.typstrenderer.settings.TypstSettingsState
+import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.Service
@@ -31,6 +33,20 @@ class TinymistManager {
         configuredPath = TypstSettingsState.getInstance().tinymistPath,
         findOnPath = { findBinary("tinymist") },
         downloadedBinary = getDownloadedBinaryPath(),
+    )
+
+    /**
+     * Resolves the tinymist binary path *inside* WSL distribution [distroId], using:
+     * 1. The user-configured Linux-side path in settings.
+     * 2. `which tinymist` run inside the distro (cached per distro — spawning `wsl.exe` to
+     *    re-probe on every file open would be far slower than the native PATH walk).
+     *
+     * No auto-download stage here: unlike the native binary, a WSL-side tinymist is expected to
+     * already be installed by the user inside their own distro.
+     */
+    fun resolveTinymistPathForWsl(distroId: String): String? = resolveWslBinaryPath(
+        configuredPath = TypstSettingsState.getInstance().tinymistWslPath,
+        findOnPath = { findBinaryInWsl(distroId, "tinymist") },
     )
 
     /**
@@ -66,6 +82,13 @@ class TinymistManager {
     companion object {
         private val log = logger<TinymistManager>()
         private val binaryCache: MutableMap<String, String> = ConcurrentHashMap<String, String>()
+
+        // Keyed by "<distroId>:<binaryName>", separate from [binaryCache] because a WSL lookup
+        // means something different (a path inside the distro's own filesystem) and is resolved
+        // by spawning wsl.exe rather than statting the Windows filesystem.
+        private val wslBinaryCache: MutableMap<String, String> = ConcurrentHashMap<String, String>()
+
+        private const val WSL_PROBE_TIMEOUT_MS = 5_000
 
         fun getInstance(): TinymistManager = ApplicationManager.getApplication().getService(TinymistManager::class.java)
 
@@ -119,6 +142,47 @@ class TinymistManager {
                 return ext in listOf("exe", "cmd", "bat", "com")
             }
             return file.canExecute()
+        }
+
+        /**
+         * Pure-function core of [resolveTinymistPathForWsl]'s 2-stage fallback. No validity check
+         * on [configuredPath] (unlike [resolveBinaryPath]'s [isBinaryExecutable] check) — it lives
+         * inside the distro's own filesystem, which the Windows host cannot reliably stat.
+         * Exposed for unit testing without spawning `wsl.exe`.
+         */
+        internal fun resolveWslBinaryPath(configuredPath: String, findOnPath: () -> String?): String? {
+            if (configuredPath.isNotBlank()) return configuredPath
+            return findOnPath()
+        }
+
+        /**
+         * Runs `which <binaryName>` inside WSL distribution [distroId] and returns its trimmed
+         * stdout, or `null` if the distro is not installed, the lookup fails, or it times out.
+         * Cached per distro/binary — spawning `wsl.exe` costs real wall-clock time compared to the
+         * native PATH walk, and this can run on every `.typ` file open.
+         */
+        internal fun findBinaryInWsl(distroId: String, binaryName: String): String? {
+            val cacheKey = "$distroId:$binaryName"
+            wslBinaryCache[cacheKey]?.let { return it }
+
+            val distribution = findInstalledWslDistribution(distroId)
+            if (distribution == null) {
+                log.debug("WSL distribution '$distroId' is not installed; cannot resolve '$binaryName'")
+                return null
+            }
+
+            val found = runCatching {
+                val commandLine = patchCommandLineForWsl(
+                    GeneralCommandLine(listOf("which", binaryName)), null, distribution, null,
+                )
+                val output = CapturingProcessHandler(commandLine).runProcess(WSL_PROBE_TIMEOUT_MS)
+                if (output.isTimeout || output.exitCode != 0) null else output.stdout.trim().ifBlank { null }
+            }.onFailure {
+                log.debug("Failed to resolve '$binaryName' inside WSL distro '$distroId': ${it.message}")
+            }.getOrNull()
+
+            found?.let { wslBinaryCache[cacheKey] = it }
+            return found
         }
 
         /**

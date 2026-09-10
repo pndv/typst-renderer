@@ -4,7 +4,6 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import org.junit.Assert.*
 import org.junit.Test
-import java.nio.file.Path
 
 /**
  * Pure-function tests for the request-building and response-reading sides of
@@ -26,7 +25,7 @@ class TinymistPreviewCommandsTest {
     private fun startParams(primary: Boolean = true, partialRendering: Boolean = false) =
         TinymistPreviewCommands.buildStartPreviewParams(
             taskId = "tab-1",
-            entry = Path.of("main.typ"),
+            entryPath = "/abs/main.typ",
             invertColours = PreviewInvertColours.NEVER,
             refreshStyle = PreviewRefreshStyle.ON_TYPE,
             primary = primary,
@@ -61,11 +60,10 @@ class TinymistPreviewCommandsTest {
     }
 
     @Test
-    fun `startPreview passes the entry last and absolutised`() {
-        val tokens = argv(startParams())
-        val entry = tokens.last()
-        assertTrue("entry must be absolute: $entry", Path.of(entry).isAbsolute)
-        assertTrue("entry must preserve filename: $entry", entry.endsWith("main.typ"))
+    fun `startPreview passes the entry path last, verbatim`() { // Absolutising (and, for a WSL target, translating to the distro's native
+        // path) is TinymistCommands.resolveWirePath's job, done before this builder
+        // is called — this only pins that the resolved string lands as the last argv token.
+        assertEquals("/abs/main.typ", argv(startParams()).last())
     }
 
     @Test
@@ -83,7 +81,7 @@ class TinymistPreviewCommandsTest {
         assertEquals("auto", PreviewInvertColours.AUTO.wireValue)
 
         val tokens = TinymistPreviewCommands.buildStartPreviewParams(
-            taskId = "t", entry = Path.of("a.typ"),
+            taskId = "t", entryPath = "/abs/a.typ",
             invertColours = PreviewInvertColours.AUTO,
             refreshStyle = PreviewRefreshStyle.ON_SAVE,
             primary = true, partialRendering = true,
@@ -102,7 +100,7 @@ class TinymistPreviewCommandsTest {
 
     @Test
     fun `scrollPreview sends a panelScrollTo event for the source position`() {
-        val params = TinymistPreviewCommands.buildScrollPreviewParams("tab-1", Path.of("main.typ"), 12, 3)
+        val params = TinymistPreviewCommands.buildScrollPreviewParams("tab-1", "/abs/main.typ", 12, 3)
         assertEquals("tinymist.scrollPreview", params.command)
         assertEquals(2, params.arguments.size)
         assertEquals("tab-1", params.arguments[0])
@@ -111,7 +109,7 @@ class TinymistPreviewCommandsTest {
         assertEquals("panelScrollTo", event["event"])
         assertEquals(12, event["line"])
         assertEquals(3, event["character"])
-        assertTrue(Path.of(event["filepath"] as String).isAbsolute)
+        assertEquals("/abs/main.typ", event["filepath"])
     }
 
     // ---- response reading ----

@@ -7,11 +7,15 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseError
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode
 import org.junit.Assert.*
 import org.junit.Test
-import java.nio.file.Path
 import java.util.concurrent.CompletionException
 
 /**
  * Pure-function tests for the request-building side of [TinymistCommands].
+ *
+ * [TinymistCommands.buildExportPdfParams] and [TinymistCommands.buildPinMainParams] take the
+ * exact wire-path string to send — resolving *what* that string is (the plain absolute native
+ * path, or one translated through a WSL distribution) is [TinymistCommands.resolveWirePath]'s
+ * job, exercised separately below since it needs an `LspClient`.
  *
  * The send-side ([TinymistCommands.exportPdf], [TinymistCommands.pinMain],
  * [TinymistCommands.getServerInfo]) needs a running LSP server and is exercised
@@ -22,32 +26,26 @@ class TinymistCommandsTest {
 
     @Test
     fun `exportPdf request carries the exact wire-name`() {
-        val params = TinymistCommands.buildExportPdfParams(Path.of("foo.typ"))
+        val params = TinymistCommands.buildExportPdfParams("/abs/foo.typ")
         assertEquals("tinymist.exportPdf", params.command)
     }
 
     @Test
-    fun `exportPdf request absolutises the source path`() {
-        val params = TinymistCommands.buildExportPdfParams(Path.of("foo.typ"))
-        assertEquals(1, params.arguments.size)
-        val arg = params.arguments[0] as String
-        assertTrue("argument must be absolute: $arg", Path.of(arg).isAbsolute)
-        assertTrue("argument must preserve filename: $arg", arg.endsWith("foo.typ"))
+    fun `exportPdf request forwards the wire path verbatim`() {
+        val params = TinymistCommands.buildExportPdfParams("/abs/foo.typ")
+        assertEquals(listOf("/abs/foo.typ"), params.arguments)
     }
 
     @Test
     fun `pinMain carries the exact wire-name`() {
-        val params = TinymistCommands.buildPinMainParams(Path.of("main.typ"))
+        val params = TinymistCommands.buildPinMainParams("/abs/main.typ")
         assertEquals("tinymist.pinMain", params.command)
     }
 
     @Test
-    fun `pinMain with a path absolutises and stringifies it`() {
-        val params = TinymistCommands.buildPinMainParams(Path.of("main.typ"))
-        assertEquals(1, params.arguments.size)
-        val arg = params.arguments[0] as String
-        assertTrue("pin target must be absolute: $arg", Path.of(arg).isAbsolute)
-        assertTrue("pin target must preserve filename: $arg", arg.endsWith("main.typ"))
+    fun `pinMain with a path forwards the wire path verbatim`() {
+        val params = TinymistCommands.buildPinMainParams("/abs/main.typ")
+        assertEquals(listOf("/abs/main.typ"), params.arguments)
     }
 
     @Test
