@@ -77,8 +77,9 @@ internal enum class PreviewInvertColours(val wireValue: String) {
  * different in kind: `exportPdf` is a one-shot request/response, whereas a preview is a
  * long-lived server whose port has to be tracked and whose task has to be killed on dispose.
  *
- * Wire shapes below were verified against the pinned tinymist (v0.15.2) with a hand-driven
- * JSON-RPC probe rather than read off upstream docs — see docs/improvements.md, Tier 2.7.
+ * Wire shapes below were verified against tinymist v0.15.2 with a hand-driven JSON-RPC probe
+ * rather than read off upstream docs — see docs/improvements.md, Tier 2.7 — and re-verified
+ * unchanged on v0.15.8, the version now pinned, before the pin moved to it.
  * The argument-building helpers are `internal` pure functions so the shapes can be pinned by
  * fixture-free unit tests without standing up a server.
  */

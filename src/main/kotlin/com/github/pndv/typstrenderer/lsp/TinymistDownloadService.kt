@@ -17,6 +17,8 @@ import com.intellij.util.io.HttpRequests
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -167,11 +169,19 @@ class TinymistDownloadService {
                     consecutiveFailures.set(0)
                     LOG.info("Tinymist downloaded to: ${targetFile.absolutePath}")
 
+                    // The pinned binary is in place, so downloads made for earlier pins can go.
+                    cleanUpReplacedBinaries(targetFile)
+                    manager.cleanUpStaleDownloads()
+
+                    val pinned = PlatformConfig.tinymistPin?.version
                     NotificationGroupManager.getInstance()
                         .getNotificationGroup(TYPST_NOTIFICATION_GROUP_ID)
                         .createNotification(
-                            TypstBundle.message("notification.tinymist.downloaded.title"),
-                            TypstBundle.message("notification.tinymist.downloaded.body"),
+                            TypstBundle.message("notification.tinymist.downloaded.title"), if (pinned != null) {
+                                TypstBundle.message("notification.tinymist.downloaded.version.body", pinned)
+                            } else {
+                                TypstBundle.message("notification.tinymist.downloaded.body")
+                            },
                             NotificationType.INFORMATION
                         ).notify(project)
 
@@ -274,18 +284,73 @@ class TinymistDownloadService {
             ApplicationManager.getApplication().getService(TinymistDownloadService::class.java)
 
         /**
-         * Moves [tempFile] to [target], overwriting if [target] exists.
-         * Tries a fast rename first, falling back to copy and delete when the
-         * rename isn't possible (e.g. across filesystems).
+         * Marks a binary that was moved aside to free its name. Swept up by
+         * [cleanUpReplacedBinaries] once whatever was running it has exited.
          */
-        internal fun atomicMove(tempFile: File, target: File) {
-            if (target.exists()) {
-                target.delete()
+        internal const val REPLACED_SUFFIX = ".replaced-"
+
+        /**
+         * Moves [tempFile] onto [target], replacing whatever is there.
+         *
+         * The straightforward replace covers a first install and any Unix host. It cannot cover
+         * replacing a binary that is *running*, which is what "Download Tinymist" in the settings
+         * does while a language server is up: Windows refuses to delete or overwrite the image
+         * file of a live process. It does allow that file to be **renamed**, so the old binary is
+         * moved aside to free the name and the new one takes its place — the running language
+         * server carries on from the renamed file until it is restarted. If the second move then
+         * fails, the old binary is put back, because leaving no tinymist at all is far worse than
+         * leaving an old one.
+         *
+         * [replace] is injectable so the move-aside path can be exercised in a test: the case it
+         * exists for — a live process holding the target — cannot be staged portably.
+         */
+        internal fun atomicMove(
+            tempFile: File,
+            target: File,
+            replace: (File, File) -> Boolean = ::replaceInPlace,
+        ) {
+            if (replace(tempFile, target)) return
+
+            val aside = File(target.parentFile, "${target.name}$REPLACED_SUFFIX${System.currentTimeMillis()}")
+            if (!target.renameTo(aside)) {
+                throw IOException("Could not move ${target.absolutePath} aside to replace it")
             }
-            if (!tempFile.renameTo(target)) {
-                tempFile.copyTo(target, overwrite = true)
-                tempFile.delete()
+            if (!replace(tempFile, target)) {
+                if (!aside.renameTo(target)) { // Both moves failed: the binary is now only at the aside path. Loud, because
+                    // the next resolve will find nothing and start an unexplained re-download.
+                    LOG.warn("Tinymist binary left at ${aside.absolutePath}; ${target.absolutePath} is missing")
+                }
+                throw IOException("Could not move ${tempFile.absolutePath} into place at ${target.absolutePath}")
             }
+            if (!aside.delete()) { // Expected while the old binary still has a live process: the next sweep gets it.
+                LOG.debug("Replaced binary ${aside.absolutePath} is still in use; leaving it for later")
+                aside.deleteOnExit()
+            }
+        }
+
+        /**
+         * Deletes binaries left behind by earlier replacements. Best-effort by design: one that
+         * is still running simply stays until a later sweep, and a sweep never fails a download.
+         */
+        internal fun cleanUpReplacedBinaries(target: File) {
+            val leftovers =
+                target.parentFile?.listFiles { file -> file.name.startsWith("${target.name}$REPLACED_SUFFIX") }
+                    .orEmpty()
+            for (file in leftovers) {
+                if (file.delete()) {
+                    LOG.debug("Removed replaced tinymist binary ${file.absolutePath}")
+                } else {
+                    LOG.debug("Replaced tinymist binary ${file.absolutePath} is still in use")
+                }
+            }
+        }
+
+        private fun replaceInPlace(source: File, target: File): Boolean = try {
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            true
+        } catch (e: IOException) {
+            LOG.debug("Could not replace ${target.absolutePath} directly: ${e.message}")
+            false
         }
 
         internal fun unsupportedPlatformMessage(): String {

@@ -21,6 +21,7 @@ class TypstExternalFileLspStarterTest {
             isTypstFile = true,
             isInContent = false,
             hasParentDir = true,
+            rootDirExists = true,
             tinymistPath = "/usr/local/bin/tinymist",
         )
 
@@ -34,6 +35,7 @@ class TypstExternalFileLspStarterTest {
             isTypstFile = false,
             isInContent = false,
             hasParentDir = true,
+            rootDirExists = true,
             tinymistPath = "/usr/local/bin/tinymist",
         )
 
@@ -52,6 +54,7 @@ class TypstExternalFileLspStarterTest {
             isTypstFile = true,
             isInContent = true,
             hasParentDir = true,
+            rootDirExists = true,
             tinymistPath = "/usr/local/bin/tinymist",
         )
 
@@ -65,7 +68,40 @@ class TypstExternalFileLspStarterTest {
             isTypstFile = true,
             isInContent = false,
             hasParentDir = false,
+            rootDirExists = false,
             tinymistPath = "/usr/local/bin/tinymist",
+        )
+
+        assertSame(LspStartAction.Skip, action)
+    }
+
+    @Test
+    fun decideExternalLspAction_rootFolderGoneFromDisk_skips() { // A restored tab for a file the VFS still remembers but the disk no longer has: another
+        // machine's path, a deleted or unsynced cloud folder. The folder would become the
+        // client's working directory, and the platform refuses to start a process in one that
+        // is missing (WorkingDirectoryNotFoundException), so there must be no start attempt.
+        val action = decideExternalLspAction(
+            isUnitTestMode = false,
+            isTypstFile = true,
+            isInContent = false,
+            hasParentDir = true,
+            rootDirExists = false,
+            tinymistPath = "/usr/local/bin/tinymist",
+        )
+
+        assertSame(LspStartAction.Skip, action)
+    }
+
+    @Test
+    fun decideExternalLspAction_rootFolderGoneFromDisk_neverTriggersADownload() { // Skipping has to happen before the binary is considered: otherwise a missing tinymist
+        // would send a download off for a file no client could ever serve.
+        val action = decideExternalLspAction(
+            isUnitTestMode = false,
+            isTypstFile = true,
+            isInContent = false,
+            hasParentDir = true,
+            rootDirExists = false,
+            tinymistPath = null,
         )
 
         assertSame(LspStartAction.Skip, action)
@@ -80,6 +116,7 @@ class TypstExternalFileLspStarterTest {
             isTypstFile = true,
             isInContent = false,
             hasParentDir = true,
+            rootDirExists = true,
             tinymistPath = path,
         )
 
@@ -94,6 +131,7 @@ class TypstExternalFileLspStarterTest {
             isTypstFile = true,
             isInContent = false,
             hasParentDir = true,
+            rootDirExists = true,
             tinymistPath = null,
         )
 
@@ -107,6 +145,7 @@ class TypstExternalFileLspStarterTest {
             isTypstFile = true,
             isInContent = false,
             hasParentDir = true,
+            rootDirExists = true,
             tinymistPath = null,
         )
 

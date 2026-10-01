@@ -13,6 +13,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.LspClientManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.nio.file.Files
 
 private val log = logger<TypstExternalFileLspStarter>()
 
@@ -129,21 +130,36 @@ internal fun recoverTypstLspForFile(project: Project, file: VirtualFile) {
  * `fileOpened`, and handling them here as well would race it. A file with no parent
  * directory (never the case for a local `.typ` file on disk) cannot anchor a workspace
  * root, so it is skipped rather than mis-rooted.
+ *
+ * A parent directory that no longer exists on disk is skipped too, before any download is
+ * considered. The folder becomes the client's working directory, and the platform refuses to
+ * start a process in one that is missing (`WorkingDirectoryNotFoundException`). It happens when
+ * an editor tab is restored for a file the VFS still remembers but the disk no longer has — a
+ * path from another machine, a deleted or unsynced cloud folder.
  */
 internal fun decideExternalLspAction(
     isUnitTestMode: Boolean,
     isTypstFile: Boolean,
     isInContent: Boolean,
     hasParentDir: Boolean,
+    rootDirExists: Boolean,
     tinymistPath: String?,
 ): LspStartAction = when {
     isUnitTestMode -> LspStartAction.Skip
     !isTypstFile -> LspStartAction.Skip
     isInContent -> LspStartAction.Skip
     !hasParentDir -> LspStartAction.Skip
+    !rootDirExists -> LspStartAction.Skip
     tinymistPath != null -> LspStartAction.StartServer(tinymistPath)
     else -> LspStartAction.TriggerDownload
 }
+
+/**
+ * Whether [dir] exists on disk right now. Asks the filesystem rather than the VFS, whose view of
+ * a folder deleted while the IDE was closed stays stale until the next refresh.
+ */
+internal fun existsOnDisk(dir: VirtualFile): Boolean =
+    runCatching { Files.isDirectory(dir.toNioPath()) }.getOrDefault(false)
 
 /**
  * Editor-open entry point (the [TypstExternalFileLspStarter] listener). Hops straight off the
@@ -163,14 +179,16 @@ internal fun handleOpenedFileForExternalLsp(project: Project, file: VirtualFile)
         val isTypstFile =
             file.fileType == TypstFileType // Resolve lazily: the content check and binary resolve are pointless for the // overwhelmingly common non-.typ case.
         val isInContent = isTypstFile && isInProjectContent(project, file)
-        val needsBinary = isTypstFile && !isInContent && file.parent != null
-        val tinymistPath = if (needsBinary) TinymistManager.getInstance().resolveTinymistPath() else null
+        val parent = file.parent
+        val rootDirExists = isTypstFile && !isInContent && parent != null && existsOnDisk(parent)
+        val tinymistPath = if (rootDirExists) TinymistManager.getInstance().resolveTinymistPath() else null
 
         val action = decideExternalLspAction(
             isUnitTestMode = false,
             isTypstFile = isTypstFile,
             isInContent = isInContent,
-            hasParentDir = file.parent != null,
+            hasParentDir = parent != null,
+            rootDirExists = rootDirExists,
             tinymistPath = tinymistPath,
         )
         runExternalLspAction(project, file, action)
@@ -197,18 +215,23 @@ private suspend fun resolveExternalLspForOpenFile(
     }
 
     val isInContent = readAction { isFileInProjectContent(project, file) }
-    val hasParentDir = file.parent != null
-    val tinymistPath = if (!isInContent && hasParentDir) {
-        withContext(Dispatchers.IO) { TinymistManager.getInstance().resolveTinymistPath() }
+    val parent =
+        file.parent // The startup sweep is where a restored tab for a folder that is gone turns up, so this is the // path the on-disk check matters most on. Both it and the binary resolve touch the disk.
+    val (rootDirExists, tinymistPath) = if (!isInContent && parent != null) {
+        withContext(Dispatchers.IO) {
+            val exists = existsOnDisk(parent)
+            exists to (if (exists) TinymistManager.getInstance().resolveTinymistPath() else null)
+        }
     } else {
-        null
+        false to null
     }
 
     val action = decideExternalLspAction(
         isUnitTestMode = false,
         isTypstFile = true,
         isInContent = isInContent,
-        hasParentDir = hasParentDir,
+        hasParentDir = parent != null,
+        rootDirExists = rootDirExists,
         tinymistPath = tinymistPath,
     )
     runExternalLspAction(project, file, action)
@@ -223,7 +246,14 @@ private suspend fun resolveExternalLspForOpenFile(
  */
 private fun runExternalLspAction(project: Project, file: VirtualFile, action: LspStartAction) {
     when (action) {
-        LspStartAction.Skip -> log.debug { "Skipping external LSP start for file ${file.path}" }
+        LspStartAction.Skip -> log.debug {
+            val parent = file.parent
+            if (parent != null && !existsOnDisk(parent)) {
+                "Skipping external LSP start for ${file.path}: its folder no longer exists on disk"
+            } else {
+                "Skipping external LSP start for file ${file.path}"
+            }
+        }
 
         is LspStartAction.StartServer -> startExternalClient(project, action.tinymistPath, file)
 
@@ -254,7 +284,13 @@ private fun runExternalLspAction(project: Project, file: VirtualFile, action: Ls
 }
 
 private fun startExternalClient(project: Project, tinymistPath: String, file: VirtualFile) {
-    val rootDir = file.parent ?: return
+    val rootDir =
+        file.parent
+        ?: return // Checked again here as well as in the decision table: the post-download callback reaches this // without going back through it, and a folder can vanish while a download runs.
+    if (!existsOnDisk(rootDir)) {
+        log.info("Not starting external-file tinymist LSP for ${file.path}: ${rootDir.path} no longer exists on disk")
+        return
+    }
     log.info("Starting external-file tinymist LSP from: $tinymistPath rooted at ${rootDir.path} for file ${file.path}")
     LspClientManager.getInstance(project).ensureClientStarted(
         TinymistLspServerSupportProvider::class.java,

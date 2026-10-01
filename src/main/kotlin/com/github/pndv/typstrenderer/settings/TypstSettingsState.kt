@@ -15,7 +15,9 @@ class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
         // to deserialise the whole settings object.
         var defaultPreviewMode: String = TypstPreviewMode.LIVE.id,
         var livePreviewOnType: Boolean = true,
-        var livePreviewFollowCursor: Boolean = true
+        var livePreviewFollowCursor: Boolean = true,
+        var notifyTinymistUpdates: Boolean = true,
+        var skippedTinymistVersion: String = "",
     )
 
     private var state = State()
@@ -54,6 +56,27 @@ class TypstSettingsState : PersistentStateComponent<TypstSettingsState.State> {
         get() = state.livePreviewFollowCursor
         set(value) {
             state.livePreviewFollowCursor = value
+        }
+
+    /**
+     * Whether to raise a notification when a tinymist the user installed themselves is older than
+     * the version this plugin is tested with. Only ever governs that prompt: a plugin-managed
+     * binary always matches the pinned version, whatever this says.
+     */
+    var notifyTinymistUpdates: Boolean
+        get() = state.notifyTinymistUpdates
+        set(value) {
+            state.notifyTinymistUpdates = value
+        }
+
+    /**
+     * A pinned version the user chose to pass over, held so the same prompt is not raised at
+     * every startup. A plugin update that pins a newer version prompts again.
+     */
+    var skippedTinymistVersion: String
+        get() = state.skippedTinymistVersion
+        set(value) {
+            state.skippedTinymistVersion = value
         }
 
     override fun getState(): State = state

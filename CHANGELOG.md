@@ -4,6 +4,39 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-25
+
+### Added
+
+- **A notification when a tinymist you installed yourself is older than the version the plugin is tested with.** A
+  tinymist from Cargo, Homebrew, Scoop, winget or a manual download is never written over; instead the plugin tells you
+  which version it expects, once per IDE session, with a link to that release's notes. **Skip this version** keeps it
+  quiet until a plugin update moves to a newer tinymist, and **Don't ask again** switches it off — it can be turned back
+  on under **Settings > Tools > Typst Renderer**. A tinymist newer than the tested version is left alone.
+
+### Changed
+
+- **tinymist updated to v0.15.8** (from v0.15.2). Every command the plugin sends, and the shape of every answer it
+  reads back, was checked against the new version and found unchanged; the live preview's own page was rebuilt upstream
+  and still renders in the IDE's embedded browser.
+
+### Fixed
+
+- **A tinymist downloaded by the plugin now follows the plugin when it updates.** A binary used to be downloaded once
+  and kept for good, so plugin updates that moved to a newer tinymist never reached existing installs — they stayed on
+  whatever version they first downloaded. Downloads now live in a folder named after the version the plugin is built
+  for, so a plugin update that changes it fetches the matching tinymist the next time a `.typ` file is opened, and
+  removes the old one once nothing is running it. A plugin release that moves back to an earlier tinymist rolls the
+  binary back the same way.
+- **No language-server start attempt for a restored `.typ` tab whose folder no longer exists.** A file opened from
+  outside the project, whose folder had since been deleted or belonged to another machine, was still handed to a new
+  language server on the next IDE start, which failed and logged a `WorkingDirectoryNotFoundException`. The folder is
+  now checked on disk first.
+- Downloading tinymist from the settings while the language server was running failed on Windows, which refuses to
+  delete or overwrite the image file of a live process. The old binary is now moved aside to free the name and removed
+  once nothing is running it — and if the replacement cannot be completed, the original is put back rather than
+  leaving no language server at all.
+
 ## [0.6.1] - 2026-08-27
 
 ### Fixed
@@ -479,7 +512,8 @@ in the tree, unwired, as a revert hatch and will be removed in a later release.
 - Settings page under <kbd>Settings</kbd> > <kbd>Tools</kbd> > <kbd>Typst</kbd> for configuring binary paths
 - "Typst Output" tool window for viewing compilation output
 
-[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.6.1...HEAD
+[Unreleased]: https://github.com/pndv/typst-renderer/compare/0.6.2...HEAD
+[0.6.2]: https://github.com/pndv/typst-renderer/compare/0.6.1...0.6.2
 [0.6.1]: https://github.com/pndv/typst-renderer/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/pndv/typst-renderer/compare/0.5.1...0.6.0
 [0.5.1]: https://github.com/pndv/typst-renderer/compare/0.5.0...0.5.1

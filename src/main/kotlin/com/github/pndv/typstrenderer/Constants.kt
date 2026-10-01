@@ -24,3 +24,15 @@ internal const val TYPST_OUTPUT_TOOL_WINDOW_ID = "Typst Output"
  * `NotificationGroupManager.getNotificationGroup(...)`, not a user-facing label.
  */
 internal const val TYPST_NOTIFICATION_GROUP_ID = "Typst"
+
+/**
+ * ID of the notification group carrying the prompt raised when a tinymist the user installed is
+ * older than the version this plugin is tested with, registered in `META-INF/plugin.xml` under
+ * `<notificationGroup id="Typst Updates" .../>`.
+ *
+ * Separate from [TYPST_NOTIFICATION_GROUP_ID] on both counts that matter: it is sticky, because
+ * a prompt the user has to act on should not fade away on its own, and it is its own entry under
+ * Settings > Appearance & Behaviour > Notifications, so the prompt can be silenced without
+ * silencing everything else the plugin has to say.
+ */
+internal const val TYPST_UPDATE_NOTIFICATION_GROUP_ID = "Typst Updates"

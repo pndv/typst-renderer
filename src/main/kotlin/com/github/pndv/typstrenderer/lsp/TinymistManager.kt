@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.util.io.FileUtil
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -56,11 +57,33 @@ class TinymistManager {
     }
 
     /**
-     * Returns the expected path for the downloaded tinymist binary.
+     * Returns the expected path for the downloaded tinymist binary: inside a folder named after
+     * the version this plugin pins, such as `bin/0.15.8/tinymist.exe`.
+     *
+     * The folder is what makes a downloaded tinymist follow the plugin. A binary used to be
+     * downloaded once to a fixed path and kept forever, so a plugin update that moved to a newer
+     * tinymist never reached an existing install. Now a new pin names a folder that does not
+     * exist yet, the binary resolves as missing, and the ordinary first-install download fetches
+     * the pinned version. Pinning back to an earlier release rolls users back the same way — and
+     * because the new binary never lands on the path of the one running, nothing has to be
+     * replaced underneath a live language server.
      */
-    fun getDownloadedBinaryPath(): File {
-        val binaryName = if (isWindows()) "tinymist.exe" else "tinymist"
-        return File(getDownloadDir(), binaryName)
+    fun getDownloadedBinaryPath(): File =
+        managedBinaryPath(getDownloadDir(), PlatformConfig.tinymistPin?.version, isWindows())
+
+    /**
+     * Removes downloaded binaries that no longer match the pin, once the pinned one is in place.
+     * Leaves everything alone until then: deleting the old binary before the new one has arrived
+     * would gain nothing, since only the pinned one is ever resolved.
+     */
+    fun cleanUpStaleDownloads() {
+        val current = getDownloadedBinaryPath()
+        if (!isBinaryExecutable(current)) {
+            log.debug("Pinned tinymist not downloaded yet; leaving older downloads in place")
+            return
+        }
+        val configured = TypstSettingsState.getInstance().tinymistPath.takeIf { it.isNotBlank() }?.let(::File)
+        cleanUpStaleManagedBinaries(getDownloadDir(), current, preserve = configured)
     }
 
     companion object {
@@ -75,6 +98,48 @@ class TinymistManager {
         fun isWindows(): Boolean = osName?.lowercase()?.contains("win") ?: false
         fun isMacOS(): Boolean = osName?.lowercase()?.contains("mac") ?: false
         fun isLinux(): Boolean = osName?.lowercase()?.contains("linux") ?: false
+
+        /**
+         * Where the downloaded binary for [pinned] lives under [downloadDir]. Falls back to the
+         * folder itself when there is no pin — the layout used before downloads were versioned.
+         */
+        internal fun managedBinaryPath(downloadDir: File, pinned: TinymistVersion?, windows: Boolean): File {
+            val binaryName = if (windows) "tinymist.exe" else "tinymist"
+            return if (pinned == null) File(downloadDir, binaryName) else File(
+                File(downloadDir, pinned.toString()), binaryName
+            )
+        }
+
+        /**
+         * Deletes every download under [downloadDir] other than [current]: folders named after
+         * other versions, plus tinymist files at the top level — the unversioned layout used
+         * before, binaries moved aside during a replacement, interrupted downloads.
+         *
+         * Only entries this plugin creates are candidates, so nothing else a user might keep there
+         * is touched. [preserve] is a path the user configured explicitly; an entry holding it is
+         * kept even when stale, because deleting a binary the settings point at would be a
+         * surprise. Deletion is best-effort: on Windows a binary a live language server is still
+         * running from cannot be deleted, and simply goes on the next sweep.
+         */
+        internal fun cleanUpStaleManagedBinaries(downloadDir: File, current: File, preserve: File?) {
+            val currentDir = current.parentFile ?: return
+            if (FileUtil.filesEqual(currentDir, downloadDir)) return // Unversioned layout: nothing to compare against.
+
+            for (entry in downloadDir.listFiles().orEmpty()) {
+                val ours =
+                    if (entry.isDirectory) TinymistVersion.parse(entry.name) != null else entry.name.startsWith("tinymist")
+                if (!ours || FileUtil.filesEqual(entry, currentDir)) continue
+                if (preserve != null && FileUtil.isAncestor(entry, preserve, false)) {
+                    log.info("Keeping stale tinymist download ${entry.absolutePath}: the settings point at it")
+                    continue
+                }
+                if (entry.deleteRecursively()) {
+                    log.info("Removed stale tinymist download ${entry.absolutePath}")
+                } else {
+                    log.debug("Stale tinymist download ${entry.absolutePath} is still in use; leaving it for later")
+                }
+            }
+        }
 
         /**
          * Determines the GitHub release asset name for tinymist on the current platform.
