@@ -13,7 +13,7 @@ runs:
         echo "version=$version" >> "$GITHUB_OUTPUT"
 
     - name: Setup Java
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v6
       with:
         distribution: zulu
         java-version: ${{ steps.jdk-version.outputs.version }}
