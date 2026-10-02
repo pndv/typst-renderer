@@ -11,7 +11,8 @@ import java.nio.file.Path
  * [TinymistPreviewCommands].
  *
  * The shapes asserted here were captured from a live tinymist v0.15.2 over a hand-driven
- * JSON-RPC probe. They are easy to get wrong in ways that fail silently — a preview that
+ * JSON-RPC probe, and found unchanged on v0.15.8 when the pin moved there. They are easy to
+ * get wrong in ways that fail silently — a preview that
  * "just doesn't start" — so each one is pinned: the nested-argv wrapping, the loopback
  * ephemeral-port host, the secondary-task flag, and the numeric widening JSON puts the
  * port through on the way back.

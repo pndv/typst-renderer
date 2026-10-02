@@ -152,6 +152,19 @@ class PlatformConfigTest {
         )
     }
 
+    @Test
+    fun platformsJsonSchema_baseUrlPinsARelease() { // The pinned version names the folder a downloaded tinymist lives in, which is how a plugin
+        // update brings the binary along with it. A base URL the pin cannot be read from — a
+        // releases/latest URL, a typo in the tag — would quietly fall back to the unversioned
+        // layout, and downloaded binaries would stop following the plugin.
+        val pin = PlatformConfig.tinymistPin
+        assertNotNull("platforms.json baseUrl must pin a tinymist release: ${PlatformConfig.tinymist.baseUrl}", pin)
+        assertTrue(
+            "the pinned version must be the tag in the download URL",
+            PlatformConfig.tinymist.baseUrl.endsWith("/v${pin!!.version}"),
+        )
+    }
+
     // ---- Supported-platforms description ----
 
     @Test

@@ -40,6 +40,10 @@ class TypstSettingsConfigurable : Configurable {
                     }
                 }.comment(message("settings.lsp.download.comment"))
             }
+            row {
+                checkBox(message("settings.lsp.updates.notify.label")).comment(message("settings.lsp.updates.notify.comment"))
+                    .bindSelected(settings::notifyTinymistUpdates)
+            }
         }
 
         group(message("settings.preview.group.label")) {

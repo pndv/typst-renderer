@@ -48,6 +48,30 @@ data class PlatformKey(val os: String, val arch: String) {
 
 data class PlatformEntry(val asset: String, val archive: String?)
 
+/**
+ * The tinymist release this plugin version is built and tested against.
+ *
+ * Read out of the download URL in `platforms.json` rather than configured separately, so bumping
+ * the pin stays a one-line change with no second place to drift. [releaseUrl] is the release's
+ * page on GitHub, for "what changed" links.
+ */
+internal data class TinymistPin(val version: TinymistVersion, val releaseUrl: String)
+
+private val PINNED_DOWNLOAD_URL = Regex("""https://github\.com/([^/]+)/([^/]+)/releases/download/(v?[0-9][^/]*)/?""")
+
+/**
+ * Parses the pin out of a release-download base URL such as
+ * `https://github.com/Myriad-Dreamin/tinymist/releases/download/v0.15.8`. Returns `null` for
+ * anything else — a `releases/latest` URL pins nothing, and a test override pointing at a local
+ * server is not a release.
+ */
+internal fun parseTinymistPin(baseUrl: String): TinymistPin? {
+    val match = PINNED_DOWNLOAD_URL.matchEntire(baseUrl.trim()) ?: return null
+    val (owner, repo, tag) = match.destructured
+    val version = TinymistVersion.parse(tag) ?: return null
+    return TinymistPin(version, "https://github.com/$owner/$repo/releases/tag/$tag")
+}
+
 data class ToolConfig(val baseUrl: String, val platforms: Map<PlatformKey, PlatformEntry>) {
     fun assetFor(key: PlatformKey): PlatformEntry? = platforms[key]
     fun supportedPlatforms(): Set<PlatformKey> = platforms.keys
@@ -80,6 +104,17 @@ object PlatformConfig {
     /** The tinymist download base URL, with a test-only override layered on top. */
     val tinymistBaseUrl: String
         get() = tinymistBaseUrlOverride ?: tinymist.baseUrl
+
+    /**
+     * The pinned tinymist release, read from the real base URL — never the test override, so the
+     * managed binary's location does not move when a test points downloads at a local server.
+     * `null` only if `platforms.json` stops pinning a release, which a test guards against.
+     */
+    internal val tinymistPin: TinymistPin? by lazy {
+        parseTinymistPin(tinymist.baseUrl).also {
+            if (it == null) LOG.warn("platforms.json base URL does not pin a tinymist release: ${tinymist.baseUrl}")
+        }
+    }
 
     /**
      * Platforms tinymist ships a binary for. This is the authoritative

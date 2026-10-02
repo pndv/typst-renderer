@@ -60,6 +60,13 @@ file location.
 ### 📥 Auto-download tinymist
 On first use, the plugin auto-downloads **tinymist** from GitHub for your platform. No Cargo or Homebrew needed.
 
+### 🔄 tinymist in step with the plugin
+
+Each plugin release is built and tested against one tinymist version. A tinymist the plugin downloaded always matches
+it, and changes when the plugin updates — so a new tinymist, and the new version of the Typst language it brings,
+arrives only in a release that has been tested with it. A tinymist you installed yourself is never touched; the plugin
+tells you when it is older than the tested version, with the option to skip that version or stop asking.
+
 ---
 
 ## Live Preview
@@ -134,13 +141,14 @@ Access via **Settings → Tools → Typst Renderer**.
 
 ### Global Settings
 
-| Setting                        | Description                                                                                                               |
-|--------------------------------|---------------------------------------------------------------------------------------------------------------------------|
-| **Language Server (Tinymist)** | Status shows detected path. Leave blank to auto-detect. Click *Download Tinymist* to fetch the latest binary from GitHub. |
-| **Default preview mode**       | Which renderer a newly opened preview starts in — **Live** or **PDF**. Each editor tab can be switched with the toggle in its preview toolbar. |
-| **Update live preview on every keystroke** | On by default. Turn off to have the live preview refresh on save instead — worth it only for very large documents, where continuous recompilation costs more than the immediacy. No effect in PDF mode. |
-| **Scroll the live preview to follow the cursor** | On by default. Keeps the preview on the passage you are editing. Editors sharing one preview scroll together. No effect in PDF mode. |
-| **Remember scroll position**   | Restores the PDF preview scroll position when re-opening a `.typ` file after an IDE restart.                              |
+| Setting                                                                                             | Description                                                                                                                                                                                                                                                                                                                   |
+|-----------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Language Server (Tinymist)**                                                                      | Status shows detected path. Leave blank to auto-detect. Click *Download Tinymist* to fetch the tinymist version this plugin is tested with from GitHub.                                                                                                                                                                       |
+| **Tell me when a tinymist I installed myself is older than the version this plugin is tested with** | On by default. A tinymist downloaded by the plugin always matches the tested version; one you installed through Cargo, Homebrew, Scoop, winget or by hand is never written over, so the plugin tells you instead. The prompt offers *Skip this version* and *Don't ask again* — this setting is the way back from the latter. |
+| **Default preview mode**                                                                            | Which renderer a newly opened preview starts in — **Live** or **PDF**. Each editor tab can be switched with the toggle in its preview toolbar.                                                                                                                                                                                |
+| **Update live preview on every keystroke**                                                          | On by default. Turn off to have the live preview refresh on save instead — worth it only for very large documents, where continuous recompilation costs more than the immediacy. No effect in PDF mode.                                                                                                                       |
+| **Scroll the live preview to follow the cursor**                                                    | On by default. Keeps the preview on the passage you are editing. Editors sharing one preview scroll together. No effect in PDF mode.                                                                                                                                                                                          |
+| **Remember scroll position**                                                                        | Restores the PDF preview scroll position when re-opening a `.typ` file after an IDE restart.                                                                                                                                                                                                                                  |
 
 ### Per-Project Overrides
 

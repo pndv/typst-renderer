@@ -53,6 +53,12 @@
         <postStartupActivity
                 implementation="com.github.pndv.typstrenderer.lsp.TypstExternalFileLspStartupActivity"/>
 
+        <!-- Once per IDE session: removes tinymist downloads left over from earlier pins and
+             tells the user when a tinymist they installed themselves is older than the version
+             this plugin is tested with. -->
+        <postStartupActivity
+                implementation="com.github.pndv.typstrenderer.lsp.TinymistVersionStartupActivity"/>
+
         <!-- Symbol rename via LSP (IntelliJ's LSP module does not support textDocument/rename).
              Editor-only by design: file rename has no caret to resolve a symbol from, so this
              handler declines editor-less contexts and lets the platform's own handler rename
@@ -97,6 +103,10 @@
         <!-- Notifications -->
         <notificationGroup id="Typst" displayType="BALLOON" bundle="messages.TypstBundle"
                            key="notification.group.typst"/>
+        <!-- Sticky: the "your tinymist is behind" prompt carries actions (skip, stop asking) and
+             should wait for the user rather than fade. Its own group so it can be muted on its own. -->
+        <notificationGroup id="Typst Updates" displayType="STICKY_BALLOON" bundle="messages.TypstBundle"
+                           key="notification.group.typst.updates"/>
 
         <!-- HTTP server for PDF.js viewer assets (served to the embedded JCEF browser
              via IntelliJ's built-in Netty server, namespaced under /typst-renderer-*). -->
