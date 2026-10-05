@@ -16,7 +16,7 @@ mockitoKotlin = "6.4.0"
 changelog = "2.5.0"
 intelliJPlatform = "2.19.0"
 kotlin = "2.4.20"
-kover = "0.9.9"
+kover = "0.9.11"
 qodana = "2026.2.2"
 
 [libraries]
