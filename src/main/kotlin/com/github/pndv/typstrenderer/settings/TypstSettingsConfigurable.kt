@@ -4,6 +4,7 @@ import com.github.pndv.typstrenderer.TypstBundle.message
 import com.github.pndv.typstrenderer.editor.TypstPreviewMode
 import com.github.pndv.typstrenderer.lsp.TinymistDownloadService
 import com.github.pndv.typstrenderer.lsp.TinymistManager
+import com.github.pndv.typstrenderer.lsp.WslExecutionMode
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.ui.DialogPanel
@@ -46,6 +47,22 @@ class TypstSettingsConfigurable : Configurable {
             }
         }
 
+        if (TinymistManager.isWindows()) {
+            group(message("settings.lsp.wsl.group.label")) {
+                row(message("settings.lsp.wsl.mode.label")) {
+                    comboBox(WslExecutionMode.entries, wslModeRenderer())
+                        .comment(message("settings.lsp.wsl.mode.comment"))
+                        .bindItem(settings::wslMode.toNullableProperty(WslExecutionMode.AUTO))
+                }
+                row(message("settings.lsp.wsl.distro.label")) {
+                    textField().bindText(settings::wslDistro).comment(message("settings.lsp.wsl.distro.comment"))
+                }
+                row(message("settings.lsp.wsl.path.label")) {
+                    textField().bindText(settings::tinymistWslPath).comment(message("settings.lsp.wsl.path.comment"))
+                }
+            }
+        }
+
         group(message("settings.preview.group.label")) {
             row(message("settings.preview.mode.label")) {
                 comboBox(
@@ -82,6 +99,16 @@ class TypstSettingsConfigurable : Configurable {
         )
     }
 
+    private fun wslModeRenderer() = textListCellRenderer("") { mode: WslExecutionMode ->
+        message(
+            when (mode) {
+                WslExecutionMode.AUTO -> "settings.lsp.wsl.mode.auto"
+                WslExecutionMode.ALWAYS -> "settings.lsp.wsl.mode.always"
+                WslExecutionMode.NEVER -> "settings.lsp.wsl.mode.never"
+            }
+        )
+    }
+
     override fun isModified(): Boolean = settingsPanel?.isModified() == true
 
     override fun apply() {
@@ -94,8 +121,28 @@ class TypstSettingsConfigurable : Configurable {
         tinymistStatusLabel?.text = getTinymistStatusText()
     }
 
+    /**
+     * The settings page has no project context, so this can only reflect an explicit WSL
+     * distribution override — [WslExecutionMode.AUTO] with no override depends on which
+     * project's path the mode is applied to, which is unknowable here.
+     */
+    private fun effectiveDistroForStatus(): String? {
+        if (!TinymistManager.isWindows() || settings.wslMode == WslExecutionMode.NEVER) return null
+        return settings.wslDistro.ifBlank { null }
+    }
+
     private fun getTinymistStatusText(): String {
         val manager = TinymistManager.getInstance()
+        val distro = effectiveDistroForStatus()
+        if (distro != null) {
+            val resolvedPath = manager.resolveTinymistPathForWsl(distro)
+            return if (resolvedPath != null) {
+                message("settings.lsp.binary.found.wsl.text", resolvedPath, distro)
+            } else {
+                message("settings.lsp.binary.notFound.wsl.text", distro)
+            }
+        }
+
         val resolvedPath = manager.resolveTinymistPath()
         return if (resolvedPath != null) {
             message("settings.lsp.binary.found.text", resolvedPath)

@@ -61,9 +61,9 @@ internal sealed interface ExportPdfResult {
 internal object TinymistCommands {
     private val log = logger<TinymistCommands>()
 
-    internal fun buildExportPdfParams(source: Path): ExecuteCommandParams = ExecuteCommandParams(
+    internal fun buildExportPdfParams(sourcePath: String): ExecuteCommandParams = ExecuteCommandParams(
         "tinymist.exportPdf",
-        listOf(source.toAbsolutePath().toString()),
+        listOf(sourcePath),
     )
 
     /**
@@ -73,11 +73,31 @@ internal object TinymistCommands {
      * rejected by tinymist's `args[0] as Option<PathBuf>` parser, and `null`
      * arguments would deserialise as the field being missing entirely.
      */
-    internal fun buildPinMainParams(mainPath: Path?): ExecuteCommandParams {
-        val arg: Any = mainPath?.toAbsolutePath()?.toString() ?: JsonNull.INSTANCE
+    internal fun buildPinMainParams(mainPath: String?): ExecuteCommandParams {
+        val arg: Any = mainPath ?: JsonNull.INSTANCE
         val arguments = listOf(arg)
         log.debug("pinMain arg: $arg. Will execute command: `tinymist.pinMain $arguments`")
         return ExecuteCommandParams("tinymist.pinMain", arguments)
+    }
+
+    /**
+     * Resolves the path string tinymist should actually receive on the wire for [path] — the
+     * absolute native path by default, or the Linux-native path translated through [client]'s
+     * WSL distribution when it is one of the WSL-aware descriptors.
+     *
+     * A Linux path string must never be round-tripped through `java.nio.file.Path` on the
+     * Windows JVM this plugin runs in: `Path.of("/home/alma/x")` resolves relative to the
+     * current drive (e.g. `C:\home\alma\x`), silently producing a nonsense path. So this
+     * returns a plain `String`, computed once at the point a request is actually sent — never
+     * reconstructed as a `Path` afterwards.
+     */
+    internal fun resolveWirePath(client: LspClient, path: Path): String {
+        val distribution = when (val descriptor = client.descriptor) {
+            is TinymistLspServerDescriptor -> descriptor.wslDistribution
+            is TinymistExternalFileLspServerDescriptor -> descriptor.wslDistribution
+            else -> null
+        }
+        return wslAwareFilePath(path.toString(), distribution) ?: path.toAbsolutePath().toString()
     }
 
     internal fun buildGetServerInfoParams(): ExecuteCommandParams =
@@ -105,7 +125,7 @@ internal object TinymistCommands {
         refreshEntryForExternalFile(server, source)
         try {
             val outcome = server.sendRequestSync { server4j ->
-                val exportPdfParams = buildExportPdfParams(source)
+                val exportPdfParams = buildExportPdfParams(resolveWirePath(server, source))
                 log.debug { "exportPdf($source) params $exportPdfParams" }
                 server4j.workspaceService.executeCommand(exportPdfParams).handle { response, error ->
                     log.debug { "exportPdf raw response: type=${response?.javaClass?.name}, value=$response" }
@@ -314,7 +334,7 @@ internal object TinymistCommands {
         if (client.descriptor !is TinymistExternalFileLspServerDescriptor) return
         log.debug { "Re-pinning $source on the external-file client so tinymist re-reads it from disk" }
         client.sendRequestSync { server4j ->
-            server4j.workspaceService.executeCommand(buildPinMainParams(source))
+            server4j.workspaceService.executeCommand(buildPinMainParams(resolveWirePath(client, source)))
         }
     }
 
@@ -328,8 +348,9 @@ internal object TinymistCommands {
     @RequiresBackgroundThread
     fun pinMain(project: Project, mainPath: Path?) {
         val server = getClient(project, mainPath) ?: return
+        val wirePath = mainPath?.let { resolveWirePath(server, it) }
         server.sendRequestSync { server4j ->
-            server4j.workspaceService.executeCommand(buildPinMainParams(mainPath))
+            server4j.workspaceService.executeCommand(buildPinMainParams(wirePath))
         }
     }
 

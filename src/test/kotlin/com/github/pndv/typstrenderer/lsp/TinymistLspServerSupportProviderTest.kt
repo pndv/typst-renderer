@@ -83,4 +83,37 @@ class TinymistLspServerSupportProviderTest {
 
         assertSame(LspStartAction.Skip, action)
     }
+
+    @Test
+    fun decideLspAction_wslBinaryResolved_startsServerWithWslTarget() {
+        val path = "/home/user/.cargo/bin/tinymist"
+        val wslTarget = WslTarget("Ubuntu-22.04")
+
+        val action = decideLspAction(
+            isUnitTestMode = false,
+            isTypstFile = true,
+            tinymistPath = path,
+            wslTarget = wslTarget,
+        )
+
+        assertTrue("Expected StartServer", action is LspStartAction.StartServer)
+        val startServer = action as LspStartAction.StartServer
+        assertEquals(path, startServer.tinymistPath)
+        assertEquals(wslTarget, startServer.wslTarget)
+    }
+
+    @Test
+    fun decideLspAction_wslTargetButBinaryMissing_triggersWslNotFoundNotDownload() { // A miss inside the distro must not fall into the Windows auto-download
+        // path — there is nothing to download for a WSL-hosted tinymist.
+        val wslTarget = WslTarget("Ubuntu-22.04")
+
+        val action = decideLspAction(
+            isUnitTestMode = false,
+            isTypstFile = true,
+            tinymistPath = null,
+            wslTarget = wslTarget,
+        )
+
+        assertEquals(LspStartAction.TriggerWslNotFound(wslTarget), action)
+    }
 }
